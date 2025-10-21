@@ -13,7 +13,63 @@ Hệ thống quản lý thu chi và chấm công cho công trình xây dựng.
 - 📤 **Xuất báo cáo**: Excel, PDF, JSON
 - 💾 **Backup/Restore**: Sao lưu dữ liệu
 
-## 🚀 Deploy lên Vercel
+## 🐳 Deploy với Docker (Khuyến nghị)
+
+### 1. Cài đặt Docker
+```bash
+# Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install docker.io docker-compose
+
+# CentOS/RHEL
+sudo yum install docker docker-compose
+
+# macOS
+brew install docker docker-compose
+```
+
+### 2. Clone và cấu hình
+```bash
+git clone https://github.com/LuongVu1120/Civiwork-management.git
+cd Civiwork-management
+
+# Tạo file .env
+cp .env.example .env
+# Cập nhật DATABASE_URL trong .env
+```
+
+### 3. Deploy
+```bash
+# Cấp quyền thực thi
+chmod +x deploy.sh manage.sh ssl-setup.sh
+
+# Deploy
+./deploy.sh
+```
+
+### 4. Cấu hình Domain và SSL
+```bash
+# Thiết lập SSL cho domain của bạn
+./ssl-setup.sh your-domain.com
+```
+
+### 5. Quản lý services
+```bash
+# Xem trạng thái
+./manage.sh status
+
+# Xem logs
+./manage.sh logs
+
+# Restart services
+./manage.sh restart
+
+# Database commands
+./manage.sh db migrate
+./manage.sh db seed
+```
+
+## ☁️ Deploy lên Cloud (Vercel)
 
 ### 1. Cài đặt Vercel CLI
 ```bash
