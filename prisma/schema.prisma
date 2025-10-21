@@ -1,0 +1,177 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Roles in construction workforce
+enum Role {
+  DOI_TRUONG      // Team lead / foreman
+  THO_XAY         // Mason (thợ xây)
+  THO_PHU         // Helper (thợ phụ)
+  THUE_NGOAI      // Subcontractor / external hire
+}
+
+// Meal option per attendance
+enum MealOption {
+  FULL_DAY   // ăn cả ngày
+  HALF_DAY   // ăn nửa ngày
+  NONE       // không ăn
+}
+
+// Expense categories
+enum ExpenseCategory {
+  WAGE           // lương (tính theo chấm công) - thường tính toán, nhưng có thể ghi nhận điều chỉnh
+  MEAL           // chi phí ăn uống
+  MATERIAL       // vật tư
+  SUBCONTRACT    // thuê ngoài
+  TOOLING        // cốt pha, dụng cụ
+  MISC           // phát sinh khác
+}
+
+model Worker {
+  id                 String   @id @default(cuid())
+  fullName           String
+  role               Role
+  // Base daily rate; default by role but overridable per worker
+  dailyRateVnd       Int
+  // Responsibility allowance per month (VND), e.g. 1_500_000 for thợ chính/đội trưởng
+  monthlyAllowanceVnd Int     @default(0)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  attendances        Attendance[]
+  expenses           Expense[]
+  payrolls           PayrollMonth[]
+}
+
+model Project {
+  id          String    @id @default(cuid())
+  name        String
+  clientName  String?
+  address     String?
+  startDate   DateTime?
+  endDate     DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  attendances Attendance[]
+  receipts    Receipt[]
+  expenses    Expense[]
+  materials   MaterialPurchase[]
+}
+
+// Attendance is the source of truth for prorated wages
+model Attendance {
+  id           String     @id @default(cuid())
+  date         DateTime
+  projectId    String
+  workerId     String
+  // Day fraction: 1.0 for full day, 0.5 for half day (weekends allowed, holidays excluded from paid days)
+  dayFraction  Decimal    @db.Decimal(3,2)
+  meal         MealOption
+  notes        String?
+  createdAt    DateTime   @default(now())
+
+  project      Project    @relation(fields: [projectId], references: [id])
+  worker       Worker     @relation(fields: [workerId], references: [id])
+
+  @@unique([date, projectId, workerId], name: "attendance_unique_per_day")
+  @@index([projectId, date])
+  @@index([workerId, date])
+}
+
+// Client receipts (thu tiền) per project, usually tied to progress milestones
+model Receipt {
+  id          String   @id @default(cuid())
+  projectId   String
+  date        DateTime
+  amountVnd   Int
+  description String?
+  milestone   Int?     // e.g., 30 means 30% stage
+  createdAt   DateTime @default(now())
+
+  project     Project  @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, date])
+}
+
+// Expenses (chi tiền). Wages are computed from attendance; this table records actual outflows
+model Expense {
+  id            String           @id @default(cuid())
+  projectId     String
+  date          DateTime
+  category      ExpenseCategory
+  amountVnd     Int
+  description   String?
+  // Optional links for traceability
+  workerId      String?
+  materialId    String?
+  vendorName    String?
+  createdAt     DateTime         @default(now())
+
+  project       Project          @relation(fields: [projectId], references: [id])
+  worker        Worker?          @relation(fields: [workerId], references: [id])
+  material      MaterialPurchase? @relation(fields: [materialId], references: [id])
+
+  @@index([projectId, date])
+  @@index([category, date])
+}
+
+// Material purchases linked to a project
+model MaterialPurchase {
+  id           String   @id @default(cuid())
+  projectId    String
+  date         DateTime
+  itemName     String
+  unit         String?  // e.g., kg, m3, pcs
+  quantity     Decimal  @db.Decimal(10,2)
+  unitPriceVnd Int
+  totalVnd     Int
+  supplier     String?
+  createdAt    DateTime @default(now())
+
+  project      Project  @relation(fields: [projectId], references: [id])
+  expenses     Expense[]
+
+  @@index([projectId, date])
+}
+
+// Holidays (no-pay days). Used to exclude from paid attendance if no attendance record exists
+model Holiday {
+  id        String   @id @default(cuid())
+  date      DateTime @unique
+  name      String
+  createdAt DateTime @default(now())
+}
+
+// Monthly payroll snapshot (optional cache to store computed totals for speed)
+model PayrollMonth {
+  id                 String   @id @default(cuid())
+  workerId           String
+  year               Int
+  month              Int      // 1-12
+  totalDays          Decimal  @db.Decimal(5,2) // sum of dayFraction
+  wageTotalVnd       Int      // totalDays * dailyRateVnd effective that month
+  mealTotalVnd       Int      // meals sum
+  allowanceVnd       Int      // responsibility allowance applied
+  adjustmentsVnd     Int      @default(0) // manual adjustments
+  payableVnd         Int      // wage + meal + allowance + adjustments
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  worker             Worker   @relation(fields: [workerId], references: [id])
+
+  @@unique([workerId, year, month])
+}

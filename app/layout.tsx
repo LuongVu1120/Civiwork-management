@@ -23,10 +23,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+    <html lang="vi">
+      <head>
+        {/* Viewport tối ưu cho iPhone 12 trở lên */}
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <meta name="theme-color" content="#111827" />
+      </head>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50`}> 
         {children}
       </body>
     </html>
