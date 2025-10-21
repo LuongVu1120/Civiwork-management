@@ -1,36 +1,127 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🏗️ Civiwork Management System
 
-## Getting Started
+Hệ thống quản lý thu chi và chấm công cho công trình xây dựng.
 
-First, run the development server:
+## ✨ Tính năng
 
+- 👥 **Quản lý nhân sự**: Đội trưởng, thợ xây, thợ phụ, thuê ngoài
+- 💰 **Tính lương**: Lương theo ngày với prorate chuẩn
+- 🍽️ **Quản lý ăn uống**: Chi phí ăn cả ngày/nửa ngày
+- 📊 **Báo cáo tài chính**: Thu chi, dòng tiền theo công trình
+- 📱 **Giao diện mobile**: Tối ưu cho iPhone 12+
+- 📈 **Dashboard**: Thống kê tổng quan
+- 📤 **Xuất báo cáo**: Excel, PDF, JSON
+- 💾 **Backup/Restore**: Sao lưu dữ liệu
+
+## 🚀 Deploy lên Vercel
+
+### 1. Cài đặt Vercel CLI
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install -g vercel
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Đăng nhập Vercel
+```bash
+vercel login
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Deploy
+```bash
+vercel
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 4. Cấu hình Environment Variables
+Trong Vercel Dashboard, thêm:
+- `DATABASE_URL`: URL kết nối Supabase PostgreSQL
 
-## Learn More
+### 5. Chạy Migration
+```bash
+vercel env pull .env.local
+npx prisma migrate deploy
+npx prisma generate
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 🗄️ Database Setup
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 1. Tạo Supabase Project
+- Truy cập [supabase.com](https://supabase.com)
+- Tạo project mới
+- Lấy connection string từ Settings > Database
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 2. Cấu hình Database
+```bash
+# Copy .env.example thành .env
+cp .env.example .env
 
-## Deploy on Vercel
+# Cập nhật DATABASE_URL trong .env
+DATABASE_URL="postgresql://postgres:[PASSWORD]@db.[PROJECT].supabase.co:5432/postgres"
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# Chạy migration
+npx prisma migrate dev --name init
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# Seed dữ liệu mẫu
+npm run prisma:seed
+```
+
+## 🛠️ Development
+
+```bash
+# Cài đặt dependencies
+npm install
+
+# Chạy development server
+npm run dev
+
+# Build production
+npm run build
+
+# Chạy production
+npm start
+```
+
+## 📱 Mobile Optimization
+
+- Viewport tối ưu cho iPhone 12+
+- Touch-friendly interface
+- Responsive design
+- PWA ready
+
+## 🔧 Tech Stack
+
+- **Frontend**: Next.js 15, TypeScript, Tailwind CSS
+- **Backend**: Next.js API Routes
+- **Database**: PostgreSQL (Supabase)
+- **ORM**: Prisma
+- **UI**: Modern components với animations
+- **Export**: ExcelJS, jsPDF
+
+## 📊 Business Rules
+
+- **Lương ngày**: Đội trưởng 500k, Thợ xây 420k, Thợ phụ 320k
+- **Phụ cấp**: Đội trưởng 1.5tr/tháng
+- **Prorate**: 0.5 cho nửa ngày, tính cuối tuần, trừ lễ
+- **Ăn uống**: Cả ngày 80k, nửa ngày 40k
+
+## 🚀 Deploy Commands
+
+```bash
+# Deploy lên Vercel
+vercel
+
+# Deploy với production build
+vercel --prod
+
+# Xem logs
+vercel logs
+
+# Xem domains
+vercel domains
+```
+
+## 📞 Support
+
+Nếu gặp vấn đề, hãy kiểm tra:
+1. Database connection
+2. Environment variables
+3. Prisma migration status
+4. Build logs trong Vercel dashboard
