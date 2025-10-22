@@ -25,7 +25,11 @@ export async function calculateMonthlyPayroll(prisma: PrismaClient, workerId: st
   }
 
   const wageTotal = Math.round(totalDays * worker.dailyRateVnd);
+  
+  // Phụ cấp tháng: chỉ tính một lần cho toàn bộ tháng, không phụ thuộc vào số dự án
+  // Đội trưởng nhận phụ cấp trách nhiệm cố định mỗi tháng
   const allowance = worker.monthlyAllowanceVnd ?? 0;
+  
   const payable = wageTotal + mealTotal + allowance;
 
   return {

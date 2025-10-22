@@ -11,10 +11,8 @@ const nextConfig = {
   // Optimize for production
   compress: true,
   poweredByHeader: false,
-  // Enable experimental features for better performance
-  experimental: {
-    serverComponentsExternalPackages: ['@prisma/client'],
-  },
+  // External packages for server components
+  serverExternalPackages: ['@prisma/client'],
 }
 
 module.exports = nextConfig

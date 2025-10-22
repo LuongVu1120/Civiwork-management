@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useFormValidation, validationRules, ErrorMessage, LoadingSpinner, Toast } from "@/app/lib/validation";
 import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
 import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem } from "@/app/lib/modern-components";
+import { MobilePagination, usePagination } from "@/app/lib/pagination";
 
 type Worker = {
   id: string;
@@ -26,6 +27,9 @@ export default function WorkersPage() {
   const [filterRole, setFilterRole] = useState<Worker["role"] | "ALL">("ALL");
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  
+  // Pagination state
+  const [itemsPerPage, setItemsPerPage] = useState(10); // 10 items per page for mobile
 
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<Worker["role"]>("THO_XAY");
@@ -96,6 +100,15 @@ export default function WorkersPage() {
     });
   }, [list, searchTerm, filterRole]);
 
+  // Pagination
+  const { currentPage, setCurrentPage, totalPages, paginatedItems, startIndex, endIndex, resetPage } = 
+    usePagination(filteredWorkers, itemsPerPage);
+
+  // Reset to first page when filters or items per page change
+  useEffect(() => {
+    resetPage();
+  }, [searchTerm, filterRole, itemsPerPage]);
+
   return (
     <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 mx-auto max-w-md">
       {toast && (
@@ -116,55 +129,94 @@ export default function WorkersPage() {
             onChange={e => setSearchTerm(e.target.value)}
             placeholder="Tìm kiếm theo tên..."
           />
-          <ModernSelect
-            value={filterRole}
-            onChange={e => setFilterRole(e.target.value as Worker["role"] | "ALL")}
-          >
-            <option value="ALL">Tất cả vai trò</option>
-            {ROLE_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </ModernSelect>
+          <div className="grid grid-cols-2 gap-3">
+            <ModernSelect
+              value={filterRole}
+              onChange={e => setFilterRole(e.target.value as Worker["role"] | "ALL")}
+            >
+              <option value="ALL">Tất cả vai trò</option>
+              {ROLE_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </ModernSelect>
+            <ModernSelect
+              value={itemsPerPage}
+              onChange={e => setItemsPerPage(Number(e.target.value))}
+            >
+              <option value={5}>5/trang</option>
+              <option value={10}>10/trang</option>
+              <option value={20}>20/trang</option>
+              <option value={50}>50/trang</option>
+            </ModernSelect>
+          </div>
         </ModernCard>
 
         {/* Add Form */}
         {showAddForm && (
           <ModernForm onSubmit={createWorker} className="mb-6">
-            <ModernInput
-              value={fullName}
-              onChange={e=>setFullName(e.target.value)}
-              placeholder="Họ tên"
-              error={!!getError('fullName')}
-              required
-            />
-            <ErrorMessage error={getError('fullName')} />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Họ tên <span className="text-red-500">*</span>
+              </label>
+              <ModernInput
+                value={fullName}
+                onChange={e=>setFullName(e.target.value)}
+                placeholder="Nhập họ tên đầy đủ"
+                error={!!getError('fullName')}
+                required
+              />
+              <ErrorMessage error={getError('fullName')} />
+            </div>
 
-            <ModernSelect value={role} onChange={e=>setRole(e.target.value as Worker["role"])}>
-              {ROLE_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </ModernSelect>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Vai trò
+              </label>
+              <ModernSelect value={role} onChange={e=>setRole(e.target.value as Worker["role"])}>
+                {ROLE_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </ModernSelect>
+            </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Lương/ngày (VND)
+                </label>
                 <ModernInput
                   type="number"
                   value={dailyRateVnd}
                   onChange={e=>setDailyRateVnd(Number(e.target.value))}
-                  placeholder="Lương/ngày (VND)"
+                  placeholder="Ví dụ: 500000"
                   error={!!getError('dailyRateVnd')}
+                  min={0}
+                  max={10000000}
+                  step={1000}
                 />
                 <ErrorMessage error={getError('dailyRateVnd')} />
+                <div className="text-xs text-gray-500 mt-1">
+                  {selectedRole.label}: {selectedRole.defaultRate.toLocaleString()}đ
+                </div>
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Phụ cấp/tháng (VND)
+                </label>
                 <ModernInput
                   type="number"
                   value={monthlyAllowanceVnd}
                   onChange={e=>setMonthlyAllowanceVnd(Number(e.target.value))}
-                  placeholder="Phụ cấp/tháng (VND)"
+                  placeholder="Ví dụ: 1500000"
                   error={!!getError('monthlyAllowanceVnd')}
+                  min={0}
+                  max={50000000}
+                  step={100000}
                 />
                 <ErrorMessage error={getError('monthlyAllowanceVnd')} />
+                <div className="text-xs text-gray-500 mt-1">
+                  {selectedRole.defaultAllowance > 0 ? `Mặc định: ${selectedRole.defaultAllowance.toLocaleString()}đ` : 'Không có phụ cấp'}
+                </div>
               </div>
             </div>
 
@@ -183,6 +235,13 @@ export default function WorkersPage() {
           </ModernForm>
         )}
 
+        {/* Results summary */}
+        {!loading && filteredWorkers.length > 0 && (
+          <div className="text-sm text-gray-600 mb-3 px-1">
+            Hiển thị {startIndex + 1}-{Math.min(endIndex, filteredWorkers.length)} trong {filteredWorkers.length} nhân sự
+          </div>
+        )}
+
         <div className="space-y-3">
           {loading ? (
             <ModernCard className="text-center py-8">
@@ -198,7 +257,7 @@ export default function WorkersPage() {
               </div>
             </ModernCard>
           ) : (
-            filteredWorkers.map(w => (
+            paginatedItems.map(w => (
               <ModernListItem key={w.id} className="hover:scale-105">
                 <div className="font-semibold text-lg text-gray-900 mb-1">{w.fullName}</div>
                 <div className="text-sm text-gray-600">
@@ -218,6 +277,13 @@ export default function WorkersPage() {
             ))
           )}
         </div>
+
+        {/* Pagination */}
+        <MobilePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+        />
       </div>
 
       <FloatingActionButton onClick={() => setShowAddForm(true)}>

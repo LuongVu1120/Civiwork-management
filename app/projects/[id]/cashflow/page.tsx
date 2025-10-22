@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { formatVnd } from "@/app/lib/format";
 import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
 
@@ -13,26 +13,98 @@ type Totals = {
   grossProfitEstimated: number;
 };
 
-export default function ProjectCashflowPage({ params, searchParams }: { params: { id: string }, searchParams: { year?: string; month?: string } }) {
-  const projectId = params.id;
+export default function ProjectCashflowPage({ params, searchParams }: { params: Promise<{ id: string }>, searchParams: Promise<{ year?: string; month?: string }> }) {
+  const resolvedParams = use(params);
+  const resolvedSearchParams = use(searchParams);
+  const projectId = resolvedParams.id;
   const [data, setData] = useState<{ totals: Totals; details?: { receipts: Array<{ date: string; amountVnd: number; description?: string | null }>; expenses: Array<{ date: string; amountVnd: number; description?: string | null }>; materials: Array<{ date: string; totalVnd: number }> } } | null>(null);
   const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
-  const [year, setYear] = useState<number>(Number(searchParams?.year) || new Date().getFullYear());
-  const [month, setMonth] = useState<number>(Number(searchParams?.month) || new Date().getMonth() + 1);
+  const [year, setYear] = useState<number>(Number(resolvedSearchParams?.year) || new Date().getFullYear());
+  const [month, setMonth] = useState<number>(Number(resolvedSearchParams?.month) || new Date().getMonth() + 1);
   const [selected, setSelected] = useState<string>(projectId);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function load() {
-    const query = new URLSearchParams();
-    if (year && month) {
-      query.set("year", String(year));
-      query.set("month", String(month));
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const query = new URLSearchParams();
+      if (year && month) {
+        query.set("year", String(year));
+        query.set("month", String(month));
+      }
+      
+      const [pRes, cfRes] = await Promise.all([
+        fetch(`/api/projects`, { cache: "no-store" }),
+        fetch(`/api/projects/${selected}/cashflow${query.toString() ? `?${query.toString()}` : ""}`, { cache: "no-store" }),
+      ]);
+      
+      if (!pRes.ok) {
+        throw new Error(`Failed to load projects: ${pRes.status}`);
+      }
+      
+      if (!cfRes.ok) {
+        const errorText = await cfRes.text();
+        let errorMessage = `Failed to load cashflow: ${cfRes.status}`;
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } catch (e) {
+          // If response is not JSON, use the text as error message
+          if (errorText) {
+            errorMessage = errorText;
+          }
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      const projectsData = await pRes.json();
+      const cashflowData = await cfRes.json();
+      
+      if (cashflowData.error) {
+        console.error('API Error:', cashflowData.error);
+        
+        // Handle specific database connection errors
+        if (cashflowData.error.includes('database') || cashflowData.error.includes('connection')) {
+          setError('Lỗi kết nối database. Vui lòng kiểm tra kết nối mạng và thử lại.');
+        } else {
+          setError(cashflowData.error);
+        }
+        
+        setData(null);
+        return;
+      }
+      
+      setProjects(projectsData);
+      setData(cashflowData);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      
+      let errorMessage = 'Không thể tải dữ liệu dòng tiền';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('503')) {
+          errorMessage = 'Lỗi kết nối database. Vui lòng kiểm tra kết nối mạng và thử lại.';
+        } else if (error.message.includes('database') || error.message.includes('connection')) {
+          errorMessage = 'Lỗi kết nối database. Vui lòng kiểm tra cài đặt database.';
+        } else if (error.message.includes('Failed to load')) {
+          errorMessage = error.message;
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setError(errorMessage);
+      setData(null);
+    } finally {
+      setLoading(false);
     }
-    const [pRes, cfRes] = await Promise.all([
-      fetch(`/api/projects`, { cache: "no-store" }),
-      fetch(`/api/projects/${selected}/cashflow${query.toString() ? `?${query.toString()}` : ""}`, { cache: "no-store" }),
-    ]);
-    setProjects(await pRes.json());
-    setData(await cfRes.json());
   }
 
   useEffect(() => { load(); }, [selected, year, month]);
@@ -49,9 +121,49 @@ export default function ProjectCashflowPage({ params, searchParams }: { params: 
         <input type="number" value={year} onChange={e=>setYear(Number(e.target.value))} className="border rounded px-2 py-2" />
         <input type="number" min={1} max={12} value={month} onChange={e=>setMonth(Number(e.target.value))} className="border rounded px-2 py-2" />
         <button onClick={load} className="rounded bg-black text-white py-2 col-span-2">Làm mới</button>
+        <button 
+          onClick={async () => {
+            try {
+              const res = await fetch('/api/health');
+              const health = await res.json();
+              if (health.database?.connected) {
+                alert('✅ Database kết nối thành công!');
+              } else {
+                alert('❌ Database không kết nối được. Vui lòng kiểm tra cài đặt.');
+              }
+            } catch (e) {
+              alert('❌ Không thể kiểm tra database health.');
+            }
+          }}
+          className="rounded bg-blue-500 text-white py-2 col-span-2"
+        >
+          Kiểm tra Database
+        </button>
       </div>
 
-      {t ? (
+      {/* Error State */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+          <div className="flex items-center space-x-3">
+            <div className="flex-shrink-0 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
+              <span className="text-white text-sm font-bold">!</span>
+            </div>
+            <div className="text-red-800">{error}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <div className="bg-white p-4 rounded-xl border shadow-sm mb-4">
+          <div className="text-center">
+            <div className="text-gray-500">Đang tải dữ liệu dòng tiền...</div>
+          </div>
+        </div>
+      )}
+
+      {/* Data Display */}
+      {!loading && !error && t ? (
         <div className="space-y-2">
           <Card label="Thu (receipts)" value={formatVnd(t.receipts)} />
           <Card label="Chi (expenses)" value={formatVnd(t.expenses)} />
@@ -67,7 +179,39 @@ export default function ProjectCashflowPage({ params, searchParams }: { params: 
             <DetailTable title="Materials" rows={data?.details?.materials || []} amountKey="totalVnd" />
           </div>
         </div>
-      ) : <div className="text-gray-500">Đang tải…</div>}
+      ) : !loading && !error && !t && (
+        <div className="text-gray-500 text-center py-8">
+          <div className="mb-4">
+            <div className="text-6xl mb-2">📊</div>
+            <h3 className="text-lg font-medium mb-2">Không có dữ liệu dòng tiền</h3>
+            <p className="text-sm text-gray-400 mb-4">
+              Có thể do chưa có dữ liệu hoặc lỗi kết nối database
+            </p>
+            <div className="space-y-2">
+              <button 
+                onClick={load}
+                className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                🔄 Thử lại
+              </button>
+              <button 
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/health');
+                    const health = await res.json();
+                    alert(`Database Status: ${health.database?.connected ? '✅ Connected' : '❌ Disconnected'}`);
+                  } catch (e) {
+                    alert('❌ Không thể kiểm tra database health');
+                  }
+                }}
+                className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors ml-2"
+              >
+                🔍 Kiểm tra Database
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );

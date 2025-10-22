@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { formatVnd } from "@/app/lib/format";
 import { PageHeader } from "@/app/lib/navigation";
+import { SkeletonStats, SkeletonList } from "@/app/lib/skeleton";
+import { useApi } from "@/app/lib/use-api";
 
 type DashboardStats = {
   totalWorkers: number;
@@ -22,6 +24,7 @@ type DashboardStats = {
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadStats();
@@ -30,8 +33,9 @@ export default function DashboardPage() {
   async function loadStats() {
     try {
       setLoading(true);
+      setError(null);
       
-      // Load basic counts
+      // Load basic counts with individual error handling
       const [workersRes, projectsRes, receiptsRes, expensesRes, materialsRes] = await Promise.all([
         fetch("/api/workers", { cache: "no-store" }),
         fetch("/api/projects", { cache: "no-store" }),
@@ -40,55 +44,107 @@ export default function DashboardPage() {
         fetch("/api/materials", { cache: "no-store" })
       ]);
 
-      const [workers, projects, receipts, expenses, materials] = await Promise.all([
-        workersRes.json(),
-        projectsRes.json(),
-        receiptsRes.json(),
-        expensesRes.json(),
-        materialsRes.json()
-      ]);
+      // Check each response individually
+      const responses = [
+        { res: workersRes, name: 'workers' },
+        { res: projectsRes, name: 'projects' },
+        { res: receiptsRes, name: 'receipts' },
+        { res: expensesRes, name: 'expenses' },
+        { res: materialsRes, name: 'materials' }
+      ];
 
-      // Calculate totals
-      const totalReceipts = receipts.reduce((sum: number, r: { amountVnd: number }) => sum + r.amountVnd, 0);
-      const totalExpenses = expenses.reduce((sum: number, e: { amountVnd: number }) => sum + e.amountVnd, 0);
-      const totalMaterials = materials.reduce((sum: number, m: { totalVnd: number }) => sum + m.totalVnd, 0);
+      const data: any = {};
+      
+      for (const { res, name } of responses) {
+        try {
+          if (!res.ok) {
+            console.error(`Failed to fetch ${name}:`, res.status, res.statusText);
+            data[name] = [];
+            continue;
+          }
+          
+          const text = await res.text();
+          if (!text) {
+            console.error(`Empty response for ${name}`);
+            data[name] = [];
+            continue;
+          }
+          
+          try {
+            data[name] = JSON.parse(text);
+          } catch (parseError) {
+            console.error(`Failed to parse JSON for ${name}:`, parseError);
+            console.error(`Response text:`, text);
+            data[name] = [];
+          }
+        } catch (error) {
+          console.error(`Error processing ${name}:`, error);
+          data[name] = [];
+        }
+      }
 
-      // Get current month payroll
+      const { workers, projects, receipts, expenses, materials } = data;
+
+      // Calculate totals with error handling
+      const totalReceipts = (receipts || []).reduce((sum: number, r: { amountVnd: number }) => sum + (r.amountVnd || 0), 0);
+      const totalExpenses = (expenses || []).reduce((sum: number, e: { amountVnd: number }) => sum + (e.amountVnd || 0), 0);
+      const totalMaterials = (materials || []).reduce((sum: number, m: { totalVnd: number }) => sum + (m.totalVnd || 0), 0);
+
+      // Get current month payroll with error handling
       const currentDate = new Date();
       const currentYear = currentDate.getFullYear();
       const currentMonth = currentDate.getMonth() + 1;
       
-      const payrollRes = await fetch(`/api/payroll/monthly?year=${currentYear}&month=${currentMonth}`, { cache: "no-store" });
-      const payrollData = await payrollRes.json();
-      const thisMonthPayroll = payrollData.totalPayableVnd || 0;
+      let thisMonthPayroll = 0;
+      try {
+        const payrollRes = await fetch(`/api/payroll/monthly?year=${currentYear}&month=${currentMonth}`, { cache: "no-store" });
+        
+        if (payrollRes.ok) {
+          const payrollText = await payrollRes.text();
+          if (payrollText) {
+            try {
+              const payrollData = JSON.parse(payrollText);
+              thisMonthPayroll = payrollData.totalPayableVnd || 0;
+            } catch (parseError) {
+              console.error('Failed to parse payroll JSON:', parseError);
+              console.error('Payroll response text:', payrollText);
+            }
+          }
+        } else {
+          console.error('Payroll API failed:', payrollRes.status, payrollRes.statusText);
+        }
+      } catch (payrollError) {
+        console.error('Error fetching payroll:', payrollError);
+      }
 
-      // Generate recent activities (last 10 items from each category)
+      // Generate recent activities (last 10 items from each category) with error handling
       const recentActivities = [
-        ...receipts.slice(0, 3).map((r: any) => ({
+        ...(receipts || []).slice(0, 3).map((r: any) => ({
           type: "receipt",
           description: `Thu tiền: ${r.description || "Không có mô tả"}`,
           amount: r.amountVnd,
           date: r.date
         })),
-        ...expenses.slice(0, 3).map((e: any) => ({
+        ...(expenses || []).slice(0, 3).map((e: any) => ({
           type: "expense",
           description: `Chi tiền: ${e.description || "Không có mô tả"}`,
           amount: e.amountVnd,
           date: e.date
         })),
-        ...materials.slice(0, 3).map((m: any) => ({
+        ...(materials || []).slice(0, 3).map((m: any) => ({
           type: "material",
-          description: `Mua vật tư: ${m.description || "Không có mô tả"}`,
+          description: `Mua vật tư: ${m.itemName || "Không có mô tả"}`,
           amount: m.totalVnd,
           date: m.date
         }))
       ]
+      .filter(activity => activity.date) // Filter out activities without dates
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 10);
 
       setStats({
-        totalWorkers: workers.length,
-        activeProjects: projects.length,
+        totalWorkers: (workers || []).length,
+        activeProjects: (projects || []).length,
         totalReceipts,
         totalExpenses,
         totalMaterials,
@@ -98,6 +154,7 @@ export default function DashboardPage() {
       });
     } catch (error) {
       console.error("Error loading dashboard stats:", error);
+      setError("Không thể tải dữ liệu dashboard. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
@@ -105,23 +162,49 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-dvh bg-gray-50 p-4 mx-auto max-w-md flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto mb-2"></div>
-          <div className="text-gray-600">Đang tải...</div>
+      <div className="min-h-dvh bg-gray-50 mx-auto max-w-md">
+        <PageHeader title="Dashboard" showBackButton={false} showHomeButton={false} />
+        <div className="p-4">
+          <SkeletonStats className="mb-6" />
+          <SkeletonList count={3} />
         </div>
       </div>
     );
   }
 
-  if (!stats) {
+  if (error || !stats) {
     return (
       <div className="min-h-dvh bg-gray-50 p-4 mx-auto max-w-md flex items-center justify-center">
-        <div className="text-center text-red-600">
-          <div className="text-lg font-semibold mb-2">Lỗi tải dữ liệu</div>
-          <button onClick={loadStats} className="bg-black text-white px-4 py-2 rounded">
-            Thử lại
-          </button>
+        <div className="text-center">
+          <div className="text-6xl mb-4">📊</div>
+          <div className="text-lg font-semibold mb-2 text-red-600">
+            {error || "Lỗi tải dữ liệu"}
+          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            Có thể do lỗi kết nối database hoặc API không phản hồi
+          </p>
+          <div className="space-y-2">
+            <button 
+              onClick={loadStats} 
+              className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+            >
+              🔄 Thử lại
+            </button>
+            <button 
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/health');
+                  const health = await res.json();
+                  alert(`Database Status: ${health.database?.connected ? '✅ Connected' : '❌ Disconnected'}`);
+                } catch (e) {
+                  alert('❌ Không thể kiểm tra database health');
+                }
+              }}
+              className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors ml-2"
+            >
+              🔍 Kiểm tra Database
+            </button>
+          </div>
         </div>
       </div>
     );

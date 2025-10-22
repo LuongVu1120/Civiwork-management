@@ -80,7 +80,10 @@ export function ModernInput({
   type = "text",
   className = "",
   error = false,
-  required = false
+  required = false,
+  min,
+  max,
+  step
 }: { 
   value: string | number;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -89,6 +92,9 @@ export function ModernInput({
   className?: string;
   error?: boolean;
   required?: boolean;
+  min?: number;
+  max?: number;
+  step?: number;
 }) {
   return (
     <input
@@ -97,6 +103,9 @@ export function ModernInput({
       onChange={onChange}
       placeholder={placeholder}
       required={required}
+      min={min}
+      max={max}
+      step={step}
       className={`w-full px-4 py-3 rounded-xl border-2 transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-blue-500/20 ${
         error 
           ? "border-red-500 bg-red-50" 
