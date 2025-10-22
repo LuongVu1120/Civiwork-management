@@ -4,8 +4,9 @@ import { formatVnd } from "@/app/lib/format";
 import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
 import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem } from "@/app/lib/modern-components";
 import { MobilePagination, usePagination } from "@/app/lib/pagination";
+import { Toast } from "@/app/lib/validation";
 
-type Receipt = { id: string; date: string; amountVnd: number; description?: string | null };
+type Receipt = { id: string; date: string; amountVnd: number; description?: string | null; projectId: string };
 type Project = { id: string; name: string };
 
 export default function ReceiptsPage() {
@@ -15,6 +16,8 @@ export default function ReceiptsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0,10));
   const [projectId, setProjectId] = useState<string>("");
@@ -68,13 +71,82 @@ export default function ReceiptsPage() {
           description: description || null,
         }),
       });
-      setAmountVnd(0);
-      setDescription("");
-      setShowAddForm(false);
+      resetForm();
       await refresh();
+      setToast({ message: "Thêm thu tiền thành công!", type: "success" });
     } catch (error) {
       console.error('Error creating receipt:', error);
+      setToast({ message: "Có lỗi xảy ra khi thêm thu tiền", type: "error" });
     }
+  }
+
+  async function updateReceipt(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingReceipt) return;
+    
+    try {
+      await fetch("/api/receipts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingReceipt.id,
+          date: new Date(date + "T00:00:00.000Z"),
+          projectId,
+          amountVnd,
+          description: description || null,
+        }),
+      });
+      resetForm();
+      await refresh();
+      setToast({ message: "Cập nhật thu tiền thành công!", type: "success" });
+    } catch (error) {
+      console.error('Error updating receipt:', error);
+      setToast({ message: "Có lỗi xảy ra khi cập nhật thu tiền", type: "error" });
+    }
+  }
+
+  async function deleteReceipt(id: string) {
+    if (!confirm("Bạn có chắc chắn muốn xóa bản ghi thu tiền này?")) return;
+    
+    try {
+      await fetch(`/api/receipts?id=${id}`, {
+        method: "DELETE",
+      });
+      await refresh();
+      setToast({ message: "Xóa thu tiền thành công!", type: "success" });
+    } catch (error) {
+      console.error('Error deleting receipt:', error);
+      setToast({ message: "Có lỗi xảy ra khi xóa thu tiền", type: "error" });
+    }
+  }
+
+  function resetForm() {
+    setDate(new Date().toISOString().slice(0,10));
+    setProjectId("");
+    setAmountVnd(0);
+    setDescription("");
+    setShowAddForm(false);
+    setEditingReceipt(null);
+  }
+
+  function startEdit(receipt: Receipt) {
+    setEditingReceipt(receipt);
+    setDate(receipt.date.slice(0,10));
+    setProjectId(receipt.projectId);
+    setAmountVnd(receipt.amountVnd);
+    setDescription(receipt.description || "");
+    setShowAddForm(true);
+    
+    // Auto scroll to form after a short delay to ensure form is rendered
+    setTimeout(() => {
+      const formElement = document.querySelector('form');
+      if (formElement) {
+        formElement.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'start' 
+        });
+      }
+    }, 100);
   }
 
   return (
@@ -100,39 +172,69 @@ export default function ReceiptsPage() {
           </ModernSelect>
         </ModernCard>
 
-        {/* Add Form */}
+        {/* Add/Edit Form */}
         {showAddForm && (
-          <ModernForm onSubmit={createReceipt} className="mb-6">
-            <ModernInput 
-              type="date" 
-              value={date} 
-              onChange={e=>setDate(e.target.value)} 
-            />
-            <ModernSelect value={projectId} onChange={e=>setProjectId(e.target.value)}>
-              <option value="">Chọn dự án...</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </ModernSelect>
-            <ModernInput 
-              type="number" 
-              value={amountVnd} 
-              onChange={e=>setAmountVnd(Number(e.target.value))} 
-              placeholder="Số tiền (VND)"
-              min={0}
-              step={1000}
-            />
-            <ModernInput 
-              value={description} 
-              onChange={e=>setDescription(e.target.value)} 
-              placeholder="Mô tả (tuỳ chọn)" 
-            />
+          <ModernForm onSubmit={editingReceipt ? updateReceipt : createReceipt} className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {editingReceipt ? "Sửa bản ghi thu tiền" : "Thêm bản ghi thu tiền mới"}
+              </h3>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Ngày</label>
+              <ModernInput 
+                type="date" 
+                value={date} 
+                onChange={e=>setDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Dự án</label>
+              <ModernSelect 
+                value={projectId} 
+                onChange={e=>setProjectId(e.target.value)}
+              >
+                <option value="">Chọn dự án...</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </ModernSelect>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Số tiền (VND)</label>
+              <ModernInput 
+                type="number" 
+                value={amountVnd} 
+                onChange={e=>setAmountVnd(Number(e.target.value))} 
+                placeholder="Ví dụ: 1000000"
+                min={0}
+                step={1000}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>
+              <ModernInput 
+                value={description} 
+                onChange={e=>setDescription(e.target.value)} 
+                placeholder="Mô tả thu tiền (tuỳ chọn)"
+              />
+            </div>
             <div className="flex gap-3">
               <ModernButton type="submit" className="flex-1">
-                Thêm thu tiền
+                {editingReceipt ? "Cập nhật" : "Thêm thu tiền"}
               </ModernButton>
               <ModernButton 
                 type="button" 
                 variant="secondary"
-                onClick={() => setShowAddForm(false)}
+                onClick={resetForm}
               >
                 Hủy
               </ModernButton>
@@ -159,21 +261,54 @@ export default function ReceiptsPage() {
               </div>
             </ModernCard>
           ) : (
-            paginatedItems.map(r => (
-              <ModernListItem key={r.id} className="hover:scale-105">
-                <div className="font-semibold text-lg text-gray-900 mb-1">
-                  {formatVnd(r.amountVnd)}
-                </div>
-                <div className="text-sm text-gray-600 mb-2">
-                  {new Date(r.date).toLocaleDateString('vi-VN')}
-                </div>
-                {r.description && (
-                  <div className="text-sm text-gray-500">
-                    {r.description}
+            paginatedItems.map(r => {
+              const projectName = projects.find(p => p.id === r.projectId)?.name || "Không xác định";
+              
+              return (
+                <ModernListItem key={r.id} className="hover:scale-105">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="font-semibold text-lg text-gray-900 mb-1">
+                        {formatVnd(r.amountVnd)}
+                      </div>
+                      <div className="text-sm text-gray-600 mb-2">
+                        {new Date(r.date).toLocaleDateString('vi-VN')}
+                      </div>
+                      <div className="text-xs text-gray-500 mb-1">
+                        📁 {projectName}
+                      </div>
+                      {r.description && (
+                        <div className="text-sm text-gray-500">
+                          {r.description}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Action buttons */}
+                    <div className="flex gap-2 ml-3">
+                      <button
+                        onClick={() => startEdit(r)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Sửa"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => deleteReceipt(r.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Xóa"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
-                )}
-              </ModernListItem>
-            ))
+                </ModernListItem>
+              );
+            })
           )}
         </div>
 
@@ -185,11 +320,21 @@ export default function ReceiptsPage() {
         />
       </div>
 
-      <FloatingActionButton onClick={() => setShowAddForm(true)}>
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-        </svg>
-      </FloatingActionButton>
+      {!showAddForm && (
+        <FloatingActionButton onClick={() => setShowAddForm(true)}>
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+        </FloatingActionButton>
+      )}
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

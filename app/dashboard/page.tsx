@@ -163,7 +163,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="min-h-dvh bg-gray-50 mx-auto max-w-md">
-        <PageHeader title="Dashboard" showBackButton={false} showHomeButton={false} />
+        <PageHeader title="Dashboard" showBackButton={false} showHomeButton={true} />
         <div className="p-4">
           <SkeletonStats className="mb-6" />
           <SkeletonList count={3} />
@@ -212,7 +212,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-dvh bg-gray-50 mx-auto max-w-md">
-      <PageHeader title="Dashboard" showBackButton={false} showHomeButton={false} />
+      <PageHeader title="Dashboard" showBackButton={false} showHomeButton={true} />
       <div className="p-4">
       
       {/* Stats Cards */}

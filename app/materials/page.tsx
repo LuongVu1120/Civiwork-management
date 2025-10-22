@@ -4,6 +4,7 @@ import { formatVnd } from "@/app/lib/format";
 import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
 import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem } from "@/app/lib/modern-components";
 import { MobilePagination, usePagination } from "@/app/lib/pagination";
+import { Toast } from "@/app/lib/validation";
 
 type Material = { 
   id: string; 
@@ -24,6 +25,7 @@ export default function MaterialsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0,10));
   const [projectId, setProjectId] = useState<string>("");
@@ -90,8 +92,10 @@ export default function MaterialsPage() {
       setSupplier("");
       setShowAddForm(false);
       await refresh();
+      setToast({ message: "Thêm vật liệu thành công!", type: "success" });
     } catch (error) {
       console.error('Error creating material:', error);
+      setToast({ message: "Có lỗi xảy ra khi thêm vật liệu", type: "error" });
     }
   }
 
@@ -238,6 +242,14 @@ export default function MaterialsPage() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
         </svg>
       </FloatingActionButton>
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

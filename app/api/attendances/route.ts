@@ -44,6 +44,61 @@ async function createAttendance(request: NextRequest) {
   return NextResponse.json(created, { status: 201 });
 }
 
+async function updateAttendance(request: NextRequest) {
+  const body = await request.json();
+  const { id, ...updateData } = body;
+  
+  if (!id) {
+    return NextResponse.json(
+      { error: "ID bản ghi chấm công là bắt buộc" }, 
+      { status: 400 }
+    );
+  }
+
+  // Validate the update data
+  const validatedData = CreateAttendanceSchema.parse(updateData);
+
+  const updated = await prisma.attendance.update({
+    where: { id },
+    data: {
+      date: new Date(validatedData.date),
+      projectId: validatedData.projectId,
+      workerId: validatedData.workerId,
+      dayFraction: validatedData.dayFraction,
+      meal: validatedData.meal,
+      notes: validatedData.notes
+    },
+    include: {
+      worker: {
+        select: { id: true, fullName: true }
+      },
+      project: {
+        select: { id: true, name: true }
+      }
+    }
+  });
+  
+  return NextResponse.json(updated);
+}
+
+async function deleteAttendance(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get('id');
+  
+  if (!id) {
+    return NextResponse.json(
+      { error: "ID bản ghi chấm công là bắt buộc" }, 
+      { status: 400 }
+    );
+  }
+
+  await prisma.attendance.delete({
+    where: { id }
+  });
+  
+  return NextResponse.json({ success: true });
+}
+
 export const GET = withMiddleware(getAttendances, {
   rateLimit: { requests: 100, windowMs: 15 * 60 * 1000 }
 });
@@ -51,6 +106,16 @@ export const GET = withMiddleware(getAttendances, {
 export const POST = withMiddleware(createAttendance, {
   rateLimit: { requests: 20, windowMs: 15 * 60 * 1000 },
   validate: CreateAttendanceSchema,
+  requireAuth: true
+});
+
+export const PUT = withMiddleware(updateAttendance, {
+  rateLimit: { requests: 20, windowMs: 15 * 60 * 1000 },
+  requireAuth: true
+});
+
+export const DELETE = withMiddleware(deleteAttendance, {
+  rateLimit: { requests: 20, windowMs: 15 * 60 * 1000 },
   requireAuth: true
 });
 
