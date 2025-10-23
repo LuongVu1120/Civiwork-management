@@ -38,14 +38,39 @@ export default function ExpensesPage() {
     setLoading(true);
     try {
       const [e, p] = await Promise.all([
-        fetch("/api/expenses", { cache: "no-store" }).then(res=>res.json()),
-        fetch("/api/projects", { cache: "no-store" }).then(res=>res.json()),
+        fetch("/api/expenses", { 
+          cache: "no-store",
+          credentials: "include"
+        }).then(async res => {
+          if (!res.ok) {
+            if (res.status === 401) {
+              window.location.href = '/auth/login';
+              return [];
+            }
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          }
+          return res.json();
+        }),
+        fetch("/api/projects", { 
+          cache: "no-store",
+          credentials: "include"
+        }).then(async res => {
+          if (!res.ok) {
+            if (res.status === 401) {
+              window.location.href = '/auth/login';
+              return [];
+            }
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          }
+          return res.json();
+        }),
       ]);
       setList(e);
       setProjects(p);
       if (!projectId && p[0]) setProjectId(p[0].id);
     } catch (error) {
       console.error('Error loading expenses:', error);
+      setToast({ message: "Có lỗi xảy ra khi tải dữ liệu", type: "error" });
     } finally {
       setLoading(false);
     }
@@ -80,6 +105,7 @@ export default function ExpensesPage() {
       await fetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           date: new Date(date + "T00:00:00.000Z"),
           projectId,
@@ -105,6 +131,7 @@ export default function ExpensesPage() {
       await fetch("/api/expenses", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           id: editingExpense.id,
           date: new Date(date + "T00:00:00.000Z"),
@@ -129,6 +156,7 @@ export default function ExpensesPage() {
     try {
       await fetch(`/api/expenses?id=${id}`, {
         method: "DELETE",
+        credentials: "include",
       });
       await refresh();
       setToast({ message: "Xóa chi phí thành công!", type: "success" });

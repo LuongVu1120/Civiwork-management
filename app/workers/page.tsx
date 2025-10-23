@@ -4,6 +4,7 @@ import { useFormValidation, validationRules, ErrorMessage, LoadingSpinner, Toast
 import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
 import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem } from "@/app/lib/modern-components";
 import { MobilePagination, usePagination } from "@/app/lib/pagination";
+import { useAuthGuard } from "@/app/hooks/useAuthGuard";
 
 type Worker = {
   id: string;
@@ -21,6 +22,7 @@ const ROLE_OPTIONS: Array<{ value: Worker["role"]; label: string; defaultRate: n
 ];
 
 export default function WorkersPage() {
+  const { loading: authLoading } = useAuthGuard();
   const [list, setList] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -46,10 +48,32 @@ export default function WorkersPage() {
 
   async function refresh() {
     setLoading(true);
-    const res = await fetch("/api/workers", { cache: "no-store" });
-    const data = await res.json();
-    setList(data);
-    setLoading(false);
+    try {
+      const res = await fetch("/api/workers", { 
+        cache: "no-store",
+        credentials: "include"
+      });
+      
+      if (!res.ok) {
+        if (res.status === 401) {
+          // Redirect to login if unauthorized
+          window.location.href = '/auth/login';
+          return;
+        }
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      
+      const data = await res.json();
+      setList(data);
+    } catch (error) {
+      console.error('Error fetching workers:', error);
+      setToast({ 
+        message: error instanceof Error ? error.message : "Có lỗi xảy ra khi tải dữ liệu", 
+        type: "error" 
+      });
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -75,6 +99,7 @@ export default function WorkersPage() {
       const response = await fetch("/api/workers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ fullName, role, dailyRateVnd, monthlyAllowanceVnd }),
       });
       
@@ -243,7 +268,7 @@ export default function WorkersPage() {
         )}
 
         <div className="space-y-3">
-          {loading ? (
+          {authLoading || loading ? (
             <ModernCard className="text-center py-8">
               <div className="text-gray-500 flex items-center justify-center">
                 <LoadingSpinner size="sm" />

@@ -38,14 +38,39 @@ export default function MaterialsPage() {
     setLoading(true);
     try {
       const [m, p] = await Promise.all([
-        fetch("/api/materials", { cache: "no-store" }).then(res=>res.json()),
-        fetch("/api/projects", { cache: "no-store" }).then(res=>res.json()),
+        fetch("/api/materials", { 
+          cache: "no-store",
+          credentials: "include"
+        }).then(async res => {
+          if (!res.ok) {
+            if (res.status === 401) {
+              window.location.href = '/auth/login';
+              return [];
+            }
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          }
+          return res.json();
+        }),
+        fetch("/api/projects", { 
+          cache: "no-store",
+          credentials: "include"
+        }).then(async res => {
+          if (!res.ok) {
+            if (res.status === 401) {
+              window.location.href = '/auth/login';
+              return [];
+            }
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          }
+          return res.json();
+        }),
       ]);
       setList(m);
       setProjects(p);
       if (!projectId && p[0]) setProjectId(p[0].id);
     } catch (error) {
       console.error('Error loading materials:', error);
+      setToast({ message: "Có lỗi xảy ra khi tải dữ liệu", type: "error" });
     } finally {
       setLoading(false);
     }
@@ -76,6 +101,7 @@ export default function MaterialsPage() {
       await fetch("/api/materials", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           date: new Date(date + "T00:00:00.000Z"),
           projectId,

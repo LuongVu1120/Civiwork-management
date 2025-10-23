@@ -1,12 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import { withMiddleware } from "@/app/lib/middleware";
 
-export async function GET() {
+async function getProjects(request: NextRequest) {
   const projects = await prisma.project.findMany({ orderBy: { createdAt: "desc" } });
   return NextResponse.json(projects);
 }
 
-export async function POST(request: Request) {
+export const GET = withMiddleware(getProjects, {
+  rateLimit: { requests: 100, windowMs: 15 * 60 * 1000 },
+  requireAuth: true
+});
+
+async function createProject(request: NextRequest) {
   try {
     const body = await request.json();
     const created = await prisma.project.create({ data: body });
@@ -20,7 +26,12 @@ export async function POST(request: Request) {
   }
 }
 
-export async function PUT(request: Request) {
+export const POST = withMiddleware(createProject, {
+  rateLimit: { requests: 20, windowMs: 15 * 60 * 1000 },
+  requireAuth: true
+});
+
+async function updateProject(request: NextRequest) {
   try {
     const body = await request.json();
     const { id, ...updateData } = body;
@@ -47,7 +58,12 @@ export async function PUT(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+export const PUT = withMiddleware(updateProject, {
+  rateLimit: { requests: 20, windowMs: 15 * 60 * 1000 },
+  requireAuth: true
+});
+
+async function deleteProject(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
@@ -72,5 +88,10 @@ export async function DELETE(request: Request) {
     );
   }
 }
+
+export const DELETE = withMiddleware(deleteProject, {
+  rateLimit: { requests: 20, windowMs: 15 * 60 * 1000 },
+  requireAuth: true
+});
 
 

@@ -13,6 +13,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// User roles for authentication
+enum UserRole {
+  ADMIN
+  MANAGER
+  USER
+}
+
 // Roles in construction workforce
 enum Role {
   DOI_TRUONG      // Team lead / foreman
@@ -36,6 +43,19 @@ enum ExpenseCategory {
   SUBCONTRACT    // thuê ngoài
   TOOLING        // cốt pha, dụng cụ
   MISC           // phát sinh khác
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  email        String   @unique
+  password     String
+  fullName     String
+  role         UserRole @default(USER)
+  isActive     Boolean  @default(true)
+  tokenVersion Int      @default(0) // For token invalidation
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model Worker {

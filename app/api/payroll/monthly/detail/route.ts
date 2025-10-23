@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import { withMiddleware } from "@/app/lib/middleware";
 
 // GET /api/payroll/monthly/detail?year=2025&month=10&workerId=xxx
-export async function GET(request: Request) {
+async function getPayrollDetail(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const year = parseInt(searchParams.get("year") || "");
@@ -66,11 +67,7 @@ export async function GET(request: Request) {
         dayFraction: Number(attendance.dayFraction),
         meal: attendance.meal,
         projectName: attendance.project?.name || 'Không xác định',
-        formattedDate: attendance.date.toLocaleDateString('vi-VN', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        })
+        formattedDate: `${attendance.date.getDate().toString().padStart(2, '0')}/${(attendance.date.getMonth() + 1).toString().padStart(2, '0')}/${attendance.date.getFullYear()}`
       });
       
       return acc;
@@ -89,3 +86,8 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withMiddleware(getPayrollDetail, {
+  rateLimit: { requests: 100, windowMs: 15 * 60 * 1000 },
+  requireAuth: true
+});

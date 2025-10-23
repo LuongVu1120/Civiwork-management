@@ -40,9 +40,45 @@ export default function AttendancesPage() {
     setLoading(true);
     try {
       const [a, w, p] = await Promise.all([
-        fetch("/api/attendances", { cache: "no-store" }).then(r=>r.json()),
-        fetch("/api/workers", { cache: "no-store" }).then(r=>r.json()),
-        fetch("/api/projects", { cache: "no-store" }).then(r=>r.json()),
+        fetch("/api/attendances", { 
+          cache: "no-store",
+          credentials: "include"
+        }).then(async r => {
+          if (!r.ok) {
+            if (r.status === 401) {
+              window.location.href = '/auth/login';
+              return [];
+            }
+            throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+          }
+          return r.json();
+        }),
+        fetch("/api/workers", { 
+          cache: "no-store",
+          credentials: "include"
+        }).then(async r => {
+          if (!r.ok) {
+            if (r.status === 401) {
+              window.location.href = '/auth/login';
+              return [];
+            }
+            throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+          }
+          return r.json();
+        }),
+        fetch("/api/projects", { 
+          cache: "no-store",
+          credentials: "include"
+        }).then(async r => {
+          if (!r.ok) {
+            if (r.status === 401) {
+              window.location.href = '/auth/login';
+              return [];
+            }
+            throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+          }
+          return r.json();
+        }),
       ]);
       setList(a);
       setWorkers(w);
@@ -51,6 +87,7 @@ export default function AttendancesPage() {
       if (!projectId && p[0]) setProjectId(p[0].id);
     } catch (error) {
       console.error('Error loading data:', error);
+      setToast({ message: "Có lỗi xảy ra khi tải dữ liệu", type: "error" });
     } finally {
       setLoading(false);
     }

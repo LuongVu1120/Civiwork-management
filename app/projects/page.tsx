@@ -21,10 +21,23 @@ export default function ProjectsPage() {
   async function refresh() {
     setLoading(true);
     try {
-      const res = await fetch("/api/projects", { cache: "no-store" });
+      const res = await fetch("/api/projects", { 
+        cache: "no-store",
+        credentials: "include"
+      });
+      
+      if (!res.ok) {
+        if (res.status === 401) {
+          window.location.href = '/auth/login';
+          return;
+        }
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      
       setList(await res.json());
     } catch (error) {
       console.error('Error loading projects:', error);
+      setToast({ message: "Có lỗi xảy ra khi tải dữ liệu", type: "error" });
     } finally {
       setLoading(false);
     }
@@ -53,6 +66,7 @@ export default function ProjectsPage() {
       await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ name, clientName: clientName || null }),
       });
       resetForm();
@@ -72,6 +86,7 @@ export default function ProjectsPage() {
       await fetch("/api/projects", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           id: editingProject.id,
           name,
@@ -93,6 +108,7 @@ export default function ProjectsPage() {
     try {
       await fetch(`/api/projects?id=${id}`, {
         method: "DELETE",
+        credentials: "include",
       });
       await refresh();
       setToast({ message: "Xóa công trình thành công!", type: "success" });

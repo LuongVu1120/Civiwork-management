@@ -8,7 +8,8 @@ export function ModernCard({
   hover = true,
   gradient = false,
   gradientFrom = "from-blue-500",
-  gradientTo = "to-blue-600"
+  gradientTo = "to-blue-600",
+  onClick
 }: { 
   children: React.ReactNode; 
   className?: string;
@@ -16,13 +17,17 @@ export function ModernCard({
   gradient?: boolean;
   gradientFrom?: string;
   gradientTo?: string;
+  onClick?: () => void;
 }) {
   const baseClasses = "rounded-2xl shadow-lg transition-all duration-300";
   const hoverClasses = hover ? "hover:shadow-xl hover:scale-105" : "";
   const gradientClasses = gradient ? `bg-gradient-to-br ${gradientFrom} ${gradientTo}` : "bg-white/80 backdrop-blur-sm border border-white/20";
   
   return (
-    <div className={`${baseClasses} ${gradientClasses} ${hoverClasses} ${className}`}>
+    <div 
+      className={`${baseClasses} ${gradientClasses} ${hoverClasses} ${className}`}
+      onClick={onClick}
+    >
       {children}
     </div>
   );

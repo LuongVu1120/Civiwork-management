@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { withMiddleware } from "@/app/lib/middleware";
 import { CreateWorkerSchema } from "@/app/lib/schemas";
-import { requireAuth } from "@/app/lib/auth";
 
 async function getWorkers(request: NextRequest) {
   const workers = await prisma.worker.findMany({ 
@@ -12,10 +11,7 @@ async function getWorkers(request: NextRequest) {
   return NextResponse.json(workers);
 }
 
-async function createWorker(request: NextRequest) {
-  const body = await request.json();
-  const validatedData = CreateWorkerSchema.parse(body);
-  
+async function createWorker(request: NextRequest, validatedData: any) {
   const created = await prisma.worker.create({
     data: {
       fullName: validatedData.fullName,
@@ -29,13 +25,14 @@ async function createWorker(request: NextRequest) {
 }
 
 export const GET = withMiddleware(getWorkers, {
-  rateLimit: { requests: 100, windowMs: 15 * 60 * 1000 }
+  rateLimit: { requests: 100, windowMs: 15 * 60 * 1000 },
+  requireAuth: true
 });
 
 export const POST = withMiddleware(createWorker, {
   rateLimit: { requests: 20, windowMs: 15 * 60 * 1000 },
   validate: CreateWorkerSchema,
-  requireAuth: true
+  requireAuth: true // Tạm thời disable auth cho development
 });
 
 

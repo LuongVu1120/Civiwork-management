@@ -7,7 +7,7 @@ const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
 // Rate limiting middleware
 export function rateLimit(requests: number = 100, windowMs: number = 15 * 60 * 1000) {
   return (request: NextRequest) => {
-    const ip = request.ip || request.headers.get('x-forwarded-for') || 'unknown';
+    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
     const now = Date.now();
     const key = `${ip}:${Math.floor(now / windowMs)}`;
     
@@ -34,9 +34,9 @@ export function rateLimit(requests: number = 100, windowMs: number = 15 * 60 * 1
 
 // Input validation middleware
 export function validateInput<T>(schema: z.ZodSchema<T>) {
-  return (request: NextRequest) => {
+  return async (request: NextRequest) => {
     try {
-      const body = request.json();
+      const body = await request.json();
       const validatedData = schema.parse(body);
       return { success: true, data: validatedData };
     } catch (error) {
@@ -46,7 +46,7 @@ export function validateInput<T>(schema: z.ZodSchema<T>) {
           error: NextResponse.json(
             {
               error: 'Validation Error',
-              details: error.errors.map(e => ({
+              details: error.issues.map((e: any) => ({
                 field: e.path.join('.'),
                 message: e.message
               }))
@@ -90,14 +90,14 @@ export function securityHeaders() {
 // Request logging middleware
 export function logRequest(request: NextRequest) {
   const { method, url } = request;
-  const ip = request.ip || request.headers.get('x-forwarded-for') || 'unknown';
+  const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
   const userAgent = request.headers.get('user-agent') || 'unknown';
   
   console.log(`[${new Date().toISOString()}] ${method} ${url} - IP: ${ip} - UA: ${userAgent}`);
 }
 
 // Error handling wrapper
-export function withErrorHandling(handler: (request: NextRequest) => Promise<Response>) {
+export function withErrorHandling(handler: (request: NextRequest) => Promise<Response | undefined>) {
   return async (request: NextRequest) => {
     try {
       logRequest(request);
@@ -108,7 +108,7 @@ export function withErrorHandling(handler: (request: NextRequest) => Promise<Res
       return NextResponse.json(
         {
           error: 'Internal Server Error',
-          details: process.env.NODE_ENV === 'development' ? error.message : undefined
+          details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined
         },
         { 
           status: 500,
@@ -124,7 +124,7 @@ export function withErrorHandling(handler: (request: NextRequest) => Promise<Res
 
 // Combine all middleware
 export function withMiddleware(
-  handler: (request: NextRequest) => Promise<Response>,
+  handler: (request: NextRequest, validatedData?: any) => Promise<Response | undefined>,
   options: {
     rateLimit?: { requests: number; windowMs: number };
     validate?: z.ZodSchema<any>;
@@ -149,11 +149,13 @@ export function withMiddleware(
     }
     
     // Apply input validation
+    let validatedData = undefined;
     if (options.validate && (request.method === 'POST' || request.method === 'PUT')) {
-      const validation = validateInput(options.validate)(request);
+      const validation = await validateInput(options.validate)(request);
       if (!validation.success) {
         return validation.error;
       }
+      validatedData = validation.data;
     }
     
     // Apply authentication
@@ -170,15 +172,17 @@ export function withMiddleware(
       }
     }
     
-    const response = await handler(request);
+    const response = await handler(request, validatedData);
     
     // Add security headers to response
-    Object.entries({
-      ...corsHeaders(),
-      ...securityHeaders()
-    }).forEach(([key, value]) => {
-      response.headers.set(key, value);
-    });
+    if (response) {
+      Object.entries({
+        ...corsHeaders(),
+        ...securityHeaders()
+      }).forEach(([key, value]) => {
+        response.headers.set(key, value);
+      });
+    }
     
     return response;
   });

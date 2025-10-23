@@ -4,7 +4,15 @@ import { formatVnd } from "@/app/lib/format";
 import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
 import { ModernCard, ModernButton } from "@/app/lib/modern-components";
 
-type Item = { fullName: string; totalDays: number; wageTotalVnd: number; mealTotalVnd: number; allowanceVnd: number; payableVnd: number };
+type Item = { 
+  workerId: string;
+  fullName: string; 
+  totalDays: number; 
+  wageTotalVnd: number; 
+  mealTotalVnd: number; 
+  allowanceVnd: number; 
+  payableVnd: number 
+};
 type DailyDetail = { 
   date: string; 
   dayFraction: number; 
@@ -28,13 +36,25 @@ export default function PayrollMonthlyPage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [workerDetails, setWorkerDetails] = useState<WorkerDetail[]>([]);
+  const [exportingExcel, setExportingExcel] = useState<boolean>(false);
+  const [exportingPDF, setExportingPDF] = useState<boolean>(false);
 
   async function load() {
     setLoading(true);
     setError(null);
     
     try {
-      const res = await fetch(`/api/payroll/monthly?year=${year}&month=${month}`, { cache: "no-store" });
+      // Tạo AbortController để có thể cancel request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      
+      const res = await fetch(`/api/payroll/monthly?year=${year}&month=${month}`, { 
+        cache: "no-store",
+        credentials: "include",
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
       
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
@@ -53,20 +73,40 @@ export default function PayrollMonthlyPage() {
       setItems(data.items || []);
       setTotal(data.totalPayableVnd || 0);
       
-      // Load detailed attendance data
+      // Load detailed attendance data với timeout riêng
       try {
-        const detailRes = await fetch(`/api/payroll/monthly/detail?year=${year}&month=${month}`, { cache: "no-store" });
+        const detailController = new AbortController();
+        const detailTimeoutId = setTimeout(() => detailController.abort(), 20000); // 20s timeout
+        
+        const detailRes = await fetch(`/api/payroll/monthly/detail?year=${year}&month=${month}`, { 
+          cache: "no-store",
+          credentials: "include",
+          signal: detailController.signal
+        });
+        
+        clearTimeout(detailTimeoutId);
+        
         if (detailRes.ok) {
           const detailData = await detailRes.json();
+          console.log('Detail data loaded:', detailData);
           setWorkerDetails(detailData.workerDetails || []);
+        } else {
+          console.error('Failed to load detail data:', detailRes.status);
         }
       } catch (detailError) {
         console.error('Error loading detail data:', detailError);
         // Don't show error for detail data, it's optional
+        if (detailError instanceof Error && detailError.name === 'AbortError') {
+          console.warn('Detail data request was aborted due to timeout');
+        }
       }
     } catch (error) {
       console.error('Error loading payroll data:', error);
-      setError('Không thể tải dữ liệu bảng công');
+      if (error instanceof Error && error.name === 'AbortError') {
+        setError('Request bị timeout. Vui lòng thử lại.');
+      } else {
+        setError('Không thể tải dữ liệu bảng công');
+      }
       setItems([]);
       setTotal(0);
     } finally {
@@ -77,12 +117,32 @@ export default function PayrollMonthlyPage() {
   useEffect(() => { load(); }, [year, month]);
 
   async function exportExcel() {
+    setExportingExcel(true);
     try {
+      console.log('Exporting Excel with data:', { items, workerDetails });
+      
+      // Kiểm tra dữ liệu trước khi export
+      if (!items || items.length === 0) {
+        alert('Không có dữ liệu để xuất Excel');
+        return;
+      }
+      
       const ExcelJS = (await import("exceljs")).default || (await import("exceljs"));
       const wb = new ExcelJS.Workbook();
       
       // Summary sheet
       const summaryWs = wb.addWorksheet(`TongKet_${year}_${month}`);
+      
+      // Tạo danh sách các ngày trong tháng
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const dateColumns = [];
+      for (let day = 1; day <= daysInMonth; day++) {
+        const formattedDate = `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`;
+        dateColumns.push(formattedDate);
+      }
+      
+      // Tạo headers
+      const headers = ["Họ tên", ...dateColumns, "Tổng công", "Lương", "Ăn", "Phụ cấp", "Phải trả"];
       
       // Header styling
       summaryWs.getRow(1).font = { bold: true, size: 12 };
@@ -93,12 +153,53 @@ export default function PayrollMonthlyPage() {
       };
       
       // Add headers
-      summaryWs.addRow(["Họ tên", "Ngày công", "Lương", "Ăn", "Phụ cấp", "Phải trả"]);
+      summaryWs.addRow(headers);
       
       // Add data rows
+      console.log('Adding data rows:', items);
       items.forEach(it => {
+        console.log('Adding row for worker:', it.fullName, 'with data:', it);
+        
+        // Tạo mảng cho các cột ngày
+        const dayColumns = [];
+        
+        try {
+          const workerDetail = workerDetails?.find(wd => wd.workerId === it.workerId);
+          
+          if (workerDetail && workerDetail.dailyDetails && workerDetail.dailyDetails.length > 0) {
+            // Tạo map các ngày làm việc
+            const workDaysMap = new Map();
+            workerDetail.dailyDetails.forEach(detail => {
+              try {
+                const date = new Date(detail.date);
+                const dayKey = date.getDate();
+                workDaysMap.set(dayKey, 'x');
+              } catch (dateError) {
+                console.warn('Error formatting date:', detail.date, dateError);
+              }
+            });
+            
+            // Tạo cột cho từng ngày trong tháng
+            for (let day = 1; day <= daysInMonth; day++) {
+              dayColumns.push(workDaysMap.has(day) ? 'x' : '');
+            }
+          } else {
+            // Nếu không có chi tiết, để trống các cột ngày
+            for (let day = 1; day <= daysInMonth; day++) {
+              dayColumns.push('');
+            }
+          }
+        } catch (detailError) {
+          console.warn('Error processing worker details for', it.fullName, detailError);
+          // Fallback: để trống các cột ngày
+          for (let day = 1; day <= daysInMonth; day++) {
+            dayColumns.push('');
+          }
+        }
+        
         summaryWs.addRow([
           it.fullName, 
+          ...dayColumns,
           it.totalDays, 
           it.wageTotalVnd, 
           it.mealTotalVnd, 
@@ -108,7 +209,15 @@ export default function PayrollMonthlyPage() {
       });
       
       // Add total row
-      const totalRow = summaryWs.addRow(["Tổng", "", "", "", "", total]);
+      const totalRowData = ["Tổng"];
+      // Thêm các cột trống cho các ngày
+      for (let day = 1; day <= daysInMonth; day++) {
+        totalRowData.push("");
+      }
+      // Thêm các cột tổng
+      totalRowData.push("", "", "", "", total.toString());
+      
+      const totalRow = summaryWs.addRow(totalRowData);
       totalRow.font = { bold: true };
       totalRow.fill = {
         type: 'pattern',
@@ -117,8 +226,17 @@ export default function PayrollMonthlyPage() {
       };
       
       // Auto-fit columns
-      summaryWs.columns.forEach(column => {
-        column.width = 15;
+      summaryWs.columns.forEach((column, index) => {
+        if (index === 0) {
+          // Cột tên
+          column.width = 20;
+        } else if (index <= daysInMonth) {
+          // Các cột ngày
+          column.width = 8;
+        } else {
+          // Các cột số liệu
+          column.width = 15;
+        }
       });
       
       // Add borders
@@ -133,9 +251,13 @@ export default function PayrollMonthlyPage() {
         });
       });
       
-      // Detail sheets for each worker
-      workerDetails.forEach(worker => {
-        const detailWs = wb.addWorksheet(`${worker.workerName}_${year}_${month}`);
+      // Detail sheets for each worker - với error handling
+      console.log('Creating detail sheets for workers:', workerDetails?.length || 0);
+      if (workerDetails && workerDetails.length > 0) {
+        workerDetails.forEach(worker => {
+          try {
+            console.log('Creating sheet for worker:', worker.workerName, 'with details:', worker.dailyDetails?.length || 0);
+            const detailWs = wb.addWorksheet(`${worker.workerName}_${year}_${month}`);
         
         // Header
         detailWs.getRow(1).font = { bold: true, size: 14 };
@@ -154,18 +276,34 @@ export default function PayrollMonthlyPage() {
         };
         detailWs.addRow(["Ngày", "Số ngày", "Dự án", "Bữa ăn", "Ghi chú"]);
         
-        // Add daily details
-        worker.dailyDetails.forEach(detail => {
-          const mealText = detail.meal === 'FULL_DAY' ? 'Cả ngày' : 
-                          detail.meal === 'HALF_DAY' ? 'Nửa ngày' : 'Không ăn';
-          detailWs.addRow([
-            detail.formattedDate,
-            detail.dayFraction,
-            detail.projectName,
-            mealText,
-            ''
-          ]);
-        });
+        // Add daily details - với error handling
+        if (worker.dailyDetails && worker.dailyDetails.length > 0) {
+          worker.dailyDetails.forEach(detail => {
+            try {
+              const mealText = detail.meal === 'FULL_DAY' ? 'Cả ngày' : 
+                              detail.meal === 'HALF_DAY' ? 'Nửa ngày' : 'Không ăn';
+              // Format date as dd/mm/yyyy
+              const date = new Date(detail.date);
+              const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+              detailWs.addRow([
+                formattedDate,
+                detail.dayFraction,
+                detail.projectName || 'Không xác định',
+                mealText,
+                ''
+              ]);
+            } catch (detailError) {
+              console.warn('Error processing daily detail:', detail, detailError);
+              detailWs.addRow([
+                detail.date || '',
+                detail.dayFraction || 0,
+                detail.projectName || 'Không xác định',
+                detail.meal || '',
+                ''
+              ]);
+            }
+          });
+        }
         
         // Summary row
         const summaryRow = detailWs.addRow([
@@ -200,24 +338,43 @@ export default function PayrollMonthlyPage() {
             });
           }
         });
-      });
+          } catch (workerError) {
+            console.error('Error creating detail sheet for worker:', worker.workerName, workerError);
+            // Skip this worker's detail sheet
+          }
+        });
+      }
       
+      console.log('Writing Excel file...');
       const buf = await wb.xlsx.writeBuffer();
+      console.log('Excel buffer created, size:', buf.byteLength);
       const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `bang-cong-chi-tiet-${year}-${month}.xlsx`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      console.log('Excel file downloaded');
     } catch (error) {
       console.error('Error exporting Excel:', error);
       alert('Có lỗi xảy ra khi xuất Excel');
+    } finally {
+      setExportingExcel(false);
     }
   }
 
   async function exportPDF() {
+    setExportingPDF(true);
     try {
+      // Kiểm tra dữ liệu trước khi export
+      if (!items || items.length === 0) {
+        alert('Không có dữ liệu để xuất PDF');
+        return;
+      }
+      
       const jsPDF = (await import("jspdf")).default;
       const autoTable = (await import("jspdf-autotable")).default;
       const doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -243,14 +400,41 @@ export default function PayrollMonthlyPage() {
       doc.text("TỔNG KẾT", 40, currentY);
       currentY += 20;
       
-      const summaryRows = items.map(it => [
-        it.fullName, 
-        it.totalDays, 
-        formatVnd(it.wageTotalVnd), 
-        formatVnd(it.mealTotalVnd), 
-        formatVnd(it.allowanceVnd), 
-        formatVnd(it.payableVnd)
-      ]);
+      const summaryRows = items.map(it => {
+        // Find worker details to get specific work dates - với error handling
+        let workDaysText = it.totalDays.toString();
+        
+        try {
+          const workerDetail = workerDetails?.find(wd => wd.workerId === it.workerId);
+          
+          if (workerDetail && workerDetail.dailyDetails && workerDetail.dailyDetails.length > 0) {
+            // Format work days as specific dates
+            const workDates = workerDetail.dailyDetails.map(detail => {
+              try {
+                const date = new Date(detail.date);
+                return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+              } catch (dateError) {
+                console.warn('Error formatting date in PDF:', detail.date, dateError);
+                return detail.date || '';
+              }
+            });
+            workDaysText = workDates.join(', ');
+          }
+        } catch (detailError) {
+          console.warn('Error processing worker details for PDF:', it.fullName, detailError);
+          // Fallback to simple total days
+          workDaysText = it.totalDays.toString();
+        }
+        
+        return [
+          it.fullName, 
+          workDaysText, 
+          formatVnd(it.wageTotalVnd), 
+          formatVnd(it.mealTotalVnd), 
+          formatVnd(it.allowanceVnd), 
+          formatVnd(it.payableVnd)
+        ];
+      });
       
       // Add total row
       summaryRows.push(["TỔNG", "", "", "", "", formatVnd(total)]);
@@ -283,8 +467,10 @@ export default function PayrollMonthlyPage() {
       
       currentY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 30;
       
-      // Detail for each worker
-      workerDetails.forEach((worker, index) => {
+      // Detail for each worker - với error handling
+      if (workerDetails && workerDetails.length > 0) {
+        workerDetails.forEach((worker, index) => {
+          try {
         // Check if we need a new page
         if (currentY > 600) {
           doc.addPage();
@@ -297,17 +483,30 @@ export default function PayrollMonthlyPage() {
         doc.text(`CHI TIẾT: ${worker.workerName}`, 40, currentY);
         currentY += 20;
         
-        // Daily details table
-        const detailRows = worker.dailyDetails.map(detail => {
-          const mealText = detail.meal === 'FULL_DAY' ? 'Cả ngày' : 
-                          detail.meal === 'HALF_DAY' ? 'Nửa ngày' : 'Không ăn';
-          return [
-            detail.formattedDate,
-            detail.dayFraction.toString(),
-            detail.projectName,
-            mealText
-          ];
-        });
+        // Daily details table - với error handling
+        const detailRows = worker.dailyDetails?.map(detail => {
+          try {
+            const mealText = detail.meal === 'FULL_DAY' ? 'Cả ngày' : 
+                            detail.meal === 'HALF_DAY' ? 'Nửa ngày' : 'Không ăn';
+            // Format date as dd/mm/yyyy
+            const date = new Date(detail.date);
+            const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+            return [
+              formattedDate,
+              detail.dayFraction?.toString() || '0',
+              detail.projectName || 'Không xác định',
+              mealText
+            ];
+          } catch (detailError) {
+            console.warn('Error processing daily detail in PDF:', detail, detailError);
+            return [
+              detail.date || '',
+              detail.dayFraction?.toString() || '0',
+              detail.projectName || 'Không xác định',
+              detail.meal || ''
+            ];
+          }
+        }) || [];
         
         // Add summary row
         detailRows.push(["TỔNG", worker.totalDays.toString(), "", ""]);
@@ -337,7 +536,12 @@ export default function PayrollMonthlyPage() {
         });
         
         currentY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 20;
-      });
+          } catch (workerError) {
+            console.error('Error creating PDF detail for worker:', worker.workerName, workerError);
+            // Skip this worker's detail
+          }
+        });
+      }
       
       // Final summary
       doc.setFontSize(12);
@@ -353,6 +557,8 @@ export default function PayrollMonthlyPage() {
     } catch (error) {
       console.error('Error exporting PDF:', error);
       alert('Có lỗi xảy ra khi xuất PDF');
+    } finally {
+      setExportingPDF(false);
     }
   }
 
@@ -398,22 +604,46 @@ export default function PayrollMonthlyPage() {
             <ModernButton 
               type="button" 
               onClick={exportExcel} 
-              className="w-full bg-emerald-600 hover:bg-emerald-700"
+              disabled={exportingExcel}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Xuất Excel
+              {exportingExcel ? (
+                <>
+                  <svg className="w-4 h-4 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Đang xuất Excel...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Xuất Excel
+                </>
+              )}
             </ModernButton>
             <ModernButton 
               type="button" 
               onClick={exportPDF} 
-              className="w-full bg-purple-600 hover:bg-purple-700"
+              disabled={exportingPDF}
+              className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
-              Xuất PDF
+              {exportingPDF ? (
+                <>
+                  <svg className="w-4 h-4 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Đang xuất PDF...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  Xuất PDF
+                </>
+              )}
             </ModernButton>
             <a 
               href="/payroll/explanation" 

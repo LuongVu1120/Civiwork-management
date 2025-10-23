@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import { withMiddleware } from "@/app/lib/middleware";
 
 // GET /api/projects/:id/cashflow?year=2025&month=10 (month optional)
-export async function GET(
+async function getProjectCashflow(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
@@ -107,4 +108,9 @@ export async function GET(
     );
   }
 }
+
+export const GET = withMiddleware(getProjectCashflow, {
+  rateLimit: { requests: 100, windowMs: 15 * 60 * 1000 },
+  requireAuth: true
+});
 

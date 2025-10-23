@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { calculateMonthlyPayroll } from "@/app/services/payroll";
+import { withMiddleware } from "@/app/lib/middleware";
 
 // GET /api/payroll/monthly?year=2025&month=10
-export async function GET(request: Request) {
+async function getMonthlyPayroll(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const year = parseInt(searchParams.get("year") || "");
@@ -67,5 +68,10 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withMiddleware(getMonthlyPayroll, {
+  rateLimit: { requests: 100, windowMs: 15 * 60 * 1000 },
+  requireAuth: true
+});
 
 

@@ -18,10 +18,7 @@ async function getAttendances(request: NextRequest) {
   return NextResponse.json(attendances);
 }
 
-async function createAttendance(request: NextRequest) {
-  const body = await request.json();
-  const validatedData = CreateAttendanceSchema.parse(body);
-  
+async function createAttendance(request: NextRequest, validatedData: any) {
   const created = await prisma.attendance.create({
     data: {
       date: new Date(validatedData.date),
@@ -44,9 +41,8 @@ async function createAttendance(request: NextRequest) {
   return NextResponse.json(created, { status: 201 });
 }
 
-async function updateAttendance(request: NextRequest) {
-  const body = await request.json();
-  const { id, ...updateData } = body;
+async function updateAttendance(request: NextRequest, validatedData: any) {
+  const { id, ...updateData } = validatedData;
   
   if (!id) {
     return NextResponse.json(
@@ -55,18 +51,15 @@ async function updateAttendance(request: NextRequest) {
     );
   }
 
-  // Validate the update data
-  const validatedData = CreateAttendanceSchema.parse(updateData);
-
   const updated = await prisma.attendance.update({
     where: { id },
     data: {
-      date: new Date(validatedData.date),
-      projectId: validatedData.projectId,
-      workerId: validatedData.workerId,
-      dayFraction: validatedData.dayFraction,
-      meal: validatedData.meal,
-      notes: validatedData.notes
+      date: new Date(updateData.date),
+      projectId: updateData.projectId,
+      workerId: updateData.workerId,
+      dayFraction: updateData.dayFraction,
+      meal: updateData.meal,
+      notes: updateData.notes
     },
     include: {
       worker: {
@@ -100,23 +93,24 @@ async function deleteAttendance(request: NextRequest) {
 }
 
 export const GET = withMiddleware(getAttendances, {
-  rateLimit: { requests: 100, windowMs: 15 * 60 * 1000 }
+  rateLimit: { requests: 100, windowMs: 15 * 60 * 1000 },
+  requireAuth: true
 });
 
 export const POST = withMiddleware(createAttendance, {
   rateLimit: { requests: 20, windowMs: 15 * 60 * 1000 },
   validate: CreateAttendanceSchema,
-  requireAuth: true
+  requireAuth: true // Tạm thời disable auth cho development
 });
 
 export const PUT = withMiddleware(updateAttendance, {
   rateLimit: { requests: 20, windowMs: 15 * 60 * 1000 },
-  requireAuth: true
+  requireAuth: true // Tạm thời disable auth cho development
 });
 
 export const DELETE = withMiddleware(deleteAttendance, {
   rateLimit: { requests: 20, windowMs: 15 * 60 * 1000 },
-  requireAuth: true
+  requireAuth: true // Tạm thời disable auth cho development
 });
 
 
