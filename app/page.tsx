@@ -10,7 +10,7 @@ export default function Home() {
   useEffect(() => {
     if (!loading && !isAuthenticated) {
       router.push('/auth/login');
-    }
+    } 
   }, [loading, isAuthenticated, router]);
 
   if (loading) {
@@ -31,6 +31,7 @@ export default function Home() {
   }
 
   const links = [
+    { href: "/dashboard", label: "Dashboard", icon: "📊", gradient: "from-blue-500 to-blue-600", hover: "hover:from-blue-600 hover:to-blue-700" },
     { href: "/attendances", label: "Chấm công", icon: "📅", gradient: "from-purple-500 to-purple-600", hover: "hover:from-purple-600 hover:to-purple-700" },
     { href: "/workers", label: "Nhân sự", icon: "👥", gradient: "from-indigo-500 to-indigo-600", hover: "hover:from-indigo-600 hover:to-indigo-700" },
     { href: "/projects", label: "Công trình", icon: "🏗️", gradient: "from-green-500 to-green-600", hover: "hover:from-green-600 hover:to-green-700" },

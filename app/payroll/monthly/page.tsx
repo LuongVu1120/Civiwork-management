@@ -88,7 +88,6 @@ export default function PayrollMonthlyPage() {
         
         if (detailRes.ok) {
           const detailData = await detailRes.json();
-          console.log('Detail data loaded:', detailData);
           setWorkerDetails(detailData.workerDetails || []);
         } else {
           console.error('Failed to load detail data:', detailRes.status);
@@ -119,7 +118,6 @@ export default function PayrollMonthlyPage() {
   async function exportExcel() {
     setExportingExcel(true);
     try {
-      console.log('Exporting Excel with data:', { items, workerDetails });
       
       // Kiểm tra dữ liệu trước khi export
       if (!items || items.length === 0) {
@@ -156,9 +154,7 @@ export default function PayrollMonthlyPage() {
       summaryWs.addRow(headers);
       
       // Add data rows
-      console.log('Adding data rows:', items);
       items.forEach(it => {
-        console.log('Adding row for worker:', it.fullName, 'with data:', it);
         
         // Tạo mảng cho các cột ngày
         const dayColumns = [];
@@ -252,11 +248,9 @@ export default function PayrollMonthlyPage() {
       });
       
       // Detail sheets for each worker - với error handling
-      console.log('Creating detail sheets for workers:', workerDetails?.length || 0);
       if (workerDetails && workerDetails.length > 0) {
         workerDetails.forEach(worker => {
           try {
-            console.log('Creating sheet for worker:', worker.workerName, 'with details:', worker.dailyDetails?.length || 0);
             const detailWs = wb.addWorksheet(`${worker.workerName}_${year}_${month}`);
         
         // Header
@@ -345,9 +339,7 @@ export default function PayrollMonthlyPage() {
         });
       }
       
-      console.log('Writing Excel file...');
       const buf = await wb.xlsx.writeBuffer();
-      console.log('Excel buffer created, size:', buf.byteLength);
       const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -357,7 +349,6 @@ export default function PayrollMonthlyPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      console.log('Excel file downloaded');
     } catch (error) {
       console.error('Error exporting Excel:', error);
       alert('Có lỗi xảy ra khi xuất Excel');

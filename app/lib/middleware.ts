@@ -87,21 +87,39 @@ export function securityHeaders() {
   };
 }
 
-// Request logging middleware
-export function logRequest(request: NextRequest) {
-  const { method, url } = request;
-  const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
-  const userAgent = request.headers.get('user-agent') || 'unknown';
-  
-  console.log(`[${new Date().toISOString()}] ${method} ${url} - IP: ${ip} - UA: ${userAgent}`);
-}
 
 // Error handling wrapper
 export function withErrorHandling(handler: (request: NextRequest) => Promise<Response | undefined>) {
   return async (request: NextRequest) => {
     try {
-      logRequest(request);
       return await handler(request);
+    } catch (error) {
+      console.error('API Error:', error);
+      
+      return NextResponse.json(
+        {
+          error: 'Internal Server Error',
+          details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined
+        },
+        { 
+          status: 500,
+          headers: {
+            ...corsHeaders(),
+            ...securityHeaders()
+          }
+        }
+      );
+    }
+  };
+}
+
+// Error handling wrapper for dynamic routes
+export function withDynamicErrorHandling<T extends Record<string, string>>(
+  handler: (request: NextRequest, context: { params: Promise<T> }) => Promise<Response | undefined>
+) {
+  return async (request: NextRequest, context: { params: Promise<T> }) => {
+    try {
+      return await handler(request, context);
     } catch (error) {
       console.error('API Error:', error);
       
@@ -189,6 +207,88 @@ export function withMiddleware(
     }
     
     const response = await handler(request, validatedData);
+    
+    // Add security headers to response
+    if (response) {
+      Object.entries({
+        ...corsHeaders(),
+        ...securityHeaders()
+      }).forEach(([key, value]) => {
+        response.headers.set(key, value);
+      });
+    }
+    
+    return response;
+  });
+}
+
+// Middleware for dynamic routes with context
+export function withDynamicMiddleware<T extends Record<string, string>>(
+  handler: (request: NextRequest, context: { params: Promise<T> }, validatedData?: any) => Promise<Response | undefined>,
+  options: {
+    rateLimit?: { requests: number; windowMs: number };
+    validate?: z.ZodSchema<any>;
+    requireAuth?: boolean;
+  } = {}
+) {
+  return withDynamicErrorHandling(async (request: NextRequest, context: { params: Promise<T> }) => {
+    // Handle CORS preflight
+    if (request.method === 'OPTIONS') {
+      return new NextResponse(null, {
+        status: 200,
+        headers: corsHeaders()
+      });
+    }
+    
+    // Apply rate limiting
+    if (options.rateLimit) {
+      const rateLimitResponse = rateLimit(options.rateLimit.requests, options.rateLimit.windowMs)(request);
+      if (rateLimitResponse) {
+        return rateLimitResponse;
+      }
+    }
+    
+    // Apply input validation
+    let validatedData = undefined;
+    if (options.validate && (request.method === 'POST' || request.method === 'PUT')) {
+      const validation = await validateInput(options.validate)(request);
+      if (!validation.success) {
+        return validation.error;
+      }
+      validatedData = validation.data;
+    }
+    
+    // Apply authentication
+    if (options.requireAuth) {
+      const authHeader = request.headers.get('authorization');
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+      
+      if (!token) {
+        return NextResponse.json(
+          { error: 'Unauthorized - No token provided' },
+          { 
+            status: 401,
+            headers: corsHeaders()
+          }
+        );
+      }
+      
+      // Verify JWT token
+      const { verifyAccessToken } = await import('./jwt');
+      const payload = verifyAccessToken(token);
+      
+      if (!payload) {
+        return NextResponse.json(
+          { error: 'Unauthorized - Invalid token' },
+          { 
+            status: 401,
+            headers: corsHeaders()
+          }
+        );
+      }
+    }
+    
+    const response = await handler(request, context, validatedData);
     
     // Add security headers to response
     if (response) {

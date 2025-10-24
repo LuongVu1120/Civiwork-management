@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
-import { withMiddleware } from "@/app/lib/middleware";
+import { withDynamicMiddleware } from "@/app/lib/middleware";
 
 // GET /api/projects/:id/cashflow?year=2025&month=10 (month optional)
 async function getProjectCashflow(
@@ -44,21 +44,10 @@ async function getProjectCashflow(
     let receipts, expenses, materials, attendances;
     
     try {
-      console.log('Fetching receipts...');
       receipts = await prisma.receipt.findMany({ where: { projectId, ...(dateFilter ? { date: dateFilter } : {}) } });
-      console.log(`Found ${receipts.length} receipts`);
-      
-      console.log('Fetching expenses...');
       expenses = await prisma.expense.findMany({ where: { projectId, ...(dateFilter ? { date: dateFilter } : {}) } });
-      console.log(`Found ${expenses.length} expenses`);
-      
-      console.log('Fetching materials...');
       materials = await prisma.materialPurchase.findMany({ where: { projectId, ...(dateFilter ? { date: dateFilter } : {}) } });
-      console.log(`Found ${materials.length} materials`);
-      
-      console.log('Fetching attendances...');
       attendances = await prisma.attendance.findMany({ where: { projectId, ...(dateFilter ? { date: dateFilter } : {}) }, include: { worker: true } });
-      console.log(`Found ${attendances.length} attendances`);
       
     } catch (dbError) {
       console.error('Database query error:', dbError);
@@ -109,7 +98,7 @@ async function getProjectCashflow(
   }
 }
 
-export const GET = withMiddleware(getProjectCashflow, {
+export const GET = withDynamicMiddleware(getProjectCashflow, {
   rateLimit: { requests: 100, windowMs: 15 * 60 * 1000 },
   requireAuth: true
 });

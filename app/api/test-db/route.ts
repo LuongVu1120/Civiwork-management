@@ -4,11 +4,8 @@ import { prisma } from "@/app/lib/prisma";
 // GET /api/test-db
 export async function GET(request: NextRequest) {
   try {
-    console.log('Testing database connection...');
-    
     // Test basic connection
     await prisma.$queryRaw`SELECT 1`;
-    console.log('✅ Basic connection OK');
     
     // Test each table
     const tableTests = [
@@ -23,9 +20,8 @@ export async function GET(request: NextRequest) {
     
     for (const { name, prisma: prismaModel } of tableTests) {
       try {
-        const count = await prismaModel.count();
+        const count = await (prismaModel as any).count();
         results[name] = { count, status: 'OK' };
-        console.log(`✅ ${name}: ${count} records`);
       } catch (error) {
         results[name] = { error: error instanceof Error ? error.message : 'Unknown error', status: 'ERROR' };
         console.error(`❌ ${name}:`, error);
