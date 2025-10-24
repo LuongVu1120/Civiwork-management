@@ -2,6 +2,7 @@
 import { useEffect, useState, use } from "react";
 import { formatVnd } from "@/app/lib/format";
 import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
+import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
 
 type Totals = {
   receipts: number;
@@ -14,6 +15,7 @@ type Totals = {
 };
 
 export default function ProjectCashflowPage({ params, searchParams }: { params: Promise<{ id: string }>, searchParams: Promise<{ year?: string; month?: string }> }) {
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const resolvedParams = use(params);
   const resolvedSearchParams = use(searchParams);
   const projectId = resolvedParams.id;
@@ -37,8 +39,8 @@ export default function ProjectCashflowPage({ params, searchParams }: { params: 
       }
       
       const [pRes, cfRes] = await Promise.all([
-        fetch(`/api/projects`, { cache: "no-store" }),
-        fetch(`/api/projects/${selected}/cashflow${query.toString() ? `?${query.toString()}` : ""}`, { cache: "no-store" }),
+        authenticatedFetch(`/api/projects`, { cache: "no-store" }),
+        authenticatedFetch(`/api/projects/${selected}/cashflow${query.toString() ? `?${query.toString()}` : ""}`, { cache: "no-store" }),
       ]);
       
       if (!pRes.ok) {

@@ -4,10 +4,12 @@ import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
 import { ModernCard, ModernButton, ModernInput, ModernForm, ModernListItem, ModernSelect } from "@/app/lib/modern-components";
 import { MobilePagination, usePagination } from "@/app/lib/pagination";
 import { Toast } from "@/app/lib/validation";
+import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
 
 type Project = { id: string; name: string; clientName?: string | null };
 
 export default function ProjectsPage() {
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const [list, setList] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -21,9 +23,8 @@ export default function ProjectsPage() {
   async function refresh() {
     setLoading(true);
     try {
-      const res = await fetch("/api/projects", { 
-        cache: "no-store",
-        credentials: "include"
+      const res = await authenticatedFetch("/api/projects", { 
+        cache: "no-store"
       });
       
       if (!res.ok) {
@@ -63,10 +64,9 @@ export default function ProjectsPage() {
   async function createProject(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await fetch("/api/projects", {
+      await authenticatedFetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ name, clientName: clientName || null }),
       });
       resetForm();
@@ -83,10 +83,9 @@ export default function ProjectsPage() {
     if (!editingProject) return;
     
     try {
-      await fetch("/api/projects", {
+      await authenticatedFetch("/api/projects", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           id: editingProject.id,
           name,
@@ -106,9 +105,8 @@ export default function ProjectsPage() {
     if (!confirm("Bạn có chắc chắn muốn xóa công trình này?")) return;
     
     try {
-      await fetch(`/api/projects?id=${id}`, {
+      await authenticatedFetch(`/api/projects?id=${id}`, {
         method: "DELETE",
-        credentials: "include",
       });
       await refresh();
       setToast({ message: "Xóa công trình thành công!", type: "success" });

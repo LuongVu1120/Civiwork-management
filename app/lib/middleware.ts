@@ -160,10 +160,26 @@ export function withMiddleware(
     
     // Apply authentication
     if (options.requireAuth) {
-      const sessionId = request.cookies.get('session')?.value;
-      if (!sessionId) {
+      const authHeader = request.headers.get('authorization');
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+      
+      if (!token) {
         return NextResponse.json(
-          { error: 'Unauthorized' },
+          { error: 'Unauthorized - No token provided' },
+          { 
+            status: 401,
+            headers: corsHeaders()
+          }
+        );
+      }
+      
+      // Verify JWT token
+      const { verifyAccessToken } = await import('./jwt');
+      const payload = verifyAccessToken(token);
+      
+      if (!payload) {
+        return NextResponse.json(
+          { error: 'Unauthorized - Invalid token' },
           { 
             status: 401,
             headers: corsHeaders()

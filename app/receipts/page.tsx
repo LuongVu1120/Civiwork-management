@@ -5,11 +5,13 @@ import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
 import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem } from "@/app/lib/modern-components";
 import { MobilePagination, usePagination } from "@/app/lib/pagination";
 import { Toast } from "@/app/lib/validation";
+import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
 
 type Receipt = { id: string; date: string; amountVnd: number; description?: string | null; projectId: string };
 type Project = { id: string; name: string };
 
 export default function ReceiptsPage() {
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const [list, setList] = useState<Receipt[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,9 +30,8 @@ export default function ReceiptsPage() {
     setLoading(true);
     try {
       const [r, p] = await Promise.all([
-        fetch("/api/receipts", { 
-          cache: "no-store",
-          credentials: "include"
+        authenticatedFetch("/api/receipts", { 
+          cache: "no-store"
         }).then(async res => {
           if (!res.ok) {
             if (res.status === 401) {
@@ -41,9 +42,8 @@ export default function ReceiptsPage() {
           }
           return res.json();
         }),
-        fetch("/api/projects", { 
-          cache: "no-store",
-          credentials: "include"
+        authenticatedFetch("/api/projects", { 
+          cache: "no-store"
         }).then(async res => {
           if (!res.ok) {
             if (res.status === 401) {
@@ -86,10 +86,9 @@ export default function ReceiptsPage() {
   async function createReceipt(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await fetch("/api/receipts", {
+      await authenticatedFetch("/api/receipts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           date: new Date(date + "T00:00:00.000Z"),
           projectId,
@@ -111,10 +110,9 @@ export default function ReceiptsPage() {
     if (!editingReceipt) return;
     
     try {
-      await fetch("/api/receipts", {
+      await authenticatedFetch("/api/receipts", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           id: editingReceipt.id,
           date: new Date(date + "T00:00:00.000Z"),
@@ -136,9 +134,8 @@ export default function ReceiptsPage() {
     if (!confirm("Bạn có chắc chắn muốn xóa bản ghi thu tiền này?")) return;
     
     try {
-      await fetch(`/api/receipts?id=${id}`, {
+      await authenticatedFetch(`/api/receipts?id=${id}`, {
         method: "DELETE",
-        credentials: "include",
       });
       await refresh();
       setToast({ message: "Xóa thu tiền thành công!", type: "success" });

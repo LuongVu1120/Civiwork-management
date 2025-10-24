@@ -5,6 +5,7 @@ import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
 import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem } from "@/app/lib/modern-components";
 import { MobilePagination, usePagination } from "@/app/lib/pagination";
 import { Toast } from "@/app/lib/validation";
+import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
 
 type Material = { 
   id: string; 
@@ -19,6 +20,7 @@ type Material = {
 type Project = { id: string; name: string };
 
 export default function MaterialsPage() {
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const [list, setList] = useState<Material[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,9 +40,8 @@ export default function MaterialsPage() {
     setLoading(true);
     try {
       const [m, p] = await Promise.all([
-        fetch("/api/materials", { 
-          cache: "no-store",
-          credentials: "include"
+        authenticatedFetch("/api/materials", { 
+          cache: "no-store"
         }).then(async res => {
           if (!res.ok) {
             if (res.status === 401) {
@@ -51,9 +52,8 @@ export default function MaterialsPage() {
           }
           return res.json();
         }),
-        fetch("/api/projects", { 
-          cache: "no-store",
-          credentials: "include"
+        authenticatedFetch("/api/projects", { 
+          cache: "no-store"
         }).then(async res => {
           if (!res.ok) {
             if (res.status === 401) {
@@ -98,10 +98,9 @@ export default function MaterialsPage() {
     e.preventDefault();
     try {
       const totalVnd = quantity * unitPriceVnd;
-      await fetch("/api/materials", {
+      await authenticatedFetch("/api/materials", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           date: new Date(date + "T00:00:00.000Z"),
           projectId,

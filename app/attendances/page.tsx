@@ -5,6 +5,7 @@ import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, Modern
 import { SkeletonList } from "@/app/lib/skeleton";
 import { MobilePagination, usePagination } from "@/app/lib/pagination";
 import { Toast } from "@/app/lib/validation";
+import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
 
 type Attendance = { 
   id: string; 
@@ -20,6 +21,7 @@ type Worker = { id: string; fullName: string };
 type Project = { id: string; name: string };
 
 export default function AttendancesPage() {
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const [list, setList] = useState<Attendance[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -40,9 +42,8 @@ export default function AttendancesPage() {
     setLoading(true);
     try {
       const [a, w, p] = await Promise.all([
-        fetch("/api/attendances", { 
-          cache: "no-store",
-          credentials: "include"
+        authenticatedFetch("/api/attendances", { 
+          cache: "no-store"
         }).then(async r => {
           if (!r.ok) {
             if (r.status === 401) {
@@ -53,9 +54,8 @@ export default function AttendancesPage() {
           }
           return r.json();
         }),
-        fetch("/api/workers", { 
-          cache: "no-store",
-          credentials: "include"
+        authenticatedFetch("/api/workers", { 
+          cache: "no-store"
         }).then(async r => {
           if (!r.ok) {
             if (r.status === 401) {
@@ -66,9 +66,8 @@ export default function AttendancesPage() {
           }
           return r.json();
         }),
-        fetch("/api/projects", { 
-          cache: "no-store",
-          credentials: "include"
+        authenticatedFetch("/api/projects", { 
+          cache: "no-store"
         }).then(async r => {
           if (!r.ok) {
             if (r.status === 401) {
@@ -126,7 +125,7 @@ export default function AttendancesPage() {
     }
     
     try {
-      await fetch("/api/attendances", {
+      await authenticatedFetch("/api/attendances", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -156,7 +155,7 @@ export default function AttendancesPage() {
     }
     
     try {
-      await fetch("/api/attendances", {
+      await authenticatedFetch("/api/attendances", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -181,7 +180,7 @@ export default function AttendancesPage() {
     if (!confirm("Bạn có chắc chắn muốn xóa bản ghi chấm công này?")) return;
     
     try {
-      await fetch(`/api/attendances?id=${id}`, {
+      await authenticatedFetch(`/api/attendances?id=${id}`, {
         method: "DELETE",
       });
       await refresh();

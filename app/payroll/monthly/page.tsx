@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { formatVnd } from "@/app/lib/format";
 import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
 import { ModernCard, ModernButton } from "@/app/lib/modern-components";
+import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
 
 type Item = { 
   workerId: string;
@@ -29,6 +30,7 @@ type WorkerDetail = {
 };
 
 export default function PayrollMonthlyPage() {
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
   const [items, setItems] = useState<Item[]>([]);
@@ -48,9 +50,8 @@ export default function PayrollMonthlyPage() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
       
-      const res = await fetch(`/api/payroll/monthly?year=${year}&month=${month}`, { 
+      const res = await authenticatedFetch(`/api/payroll/monthly?year=${year}&month=${month}`, { 
         cache: "no-store",
-        credentials: "include",
         signal: controller.signal
       });
       
@@ -78,9 +79,8 @@ export default function PayrollMonthlyPage() {
         const detailController = new AbortController();
         const detailTimeoutId = setTimeout(() => detailController.abort(), 20000); // 20s timeout
         
-        const detailRes = await fetch(`/api/payroll/monthly/detail?year=${year}&month=${month}`, { 
+        const detailRes = await authenticatedFetch(`/api/payroll/monthly/detail?year=${year}&month=${month}`, { 
           cache: "no-store",
-          credentials: "include",
           signal: detailController.signal
         });
         

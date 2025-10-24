@@ -2,10 +2,12 @@
 import { useEffect, useState } from "react";
 import { formatVnd } from "@/app/lib/format";
 import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
+import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
 
 type Worker = { id: string; fullName: string };
 
 export default function PayrollPage() {
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [workerId, setWorkerId] = useState<string>("");
   const [year, setYear] = useState<number>(new Date().getFullYear());
@@ -13,7 +15,7 @@ export default function PayrollPage() {
   const [result, setResult] = useState<{ totalDays: number; wageTotalVnd: number; mealTotalVnd: number; allowanceVnd: number; payableVnd: number } | null>(null);
 
   useEffect(() => {
-    fetch("/api/workers", { cache: "no-store" })
+    authenticatedFetch("/api/workers", { cache: "no-store" })
       .then(r=>r.json())
       .then((w: Worker[]) => { setWorkers(w); if (w[0]) setWorkerId(w[0].id); });
   }, []);
@@ -21,7 +23,7 @@ export default function PayrollPage() {
   async function run() {
     if (!workerId) return;
     const url = `/api/payroll?workerId=${encodeURIComponent(workerId)}&year=${year}&month=${month}`;
-    const res = await fetch(url, { cache: "no-store" });
+    const res = await authenticatedFetch(url, { cache: "no-store" });
     const data = await res.json();
     setResult(data);
   }

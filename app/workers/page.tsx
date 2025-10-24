@@ -5,6 +5,7 @@ import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
 import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem } from "@/app/lib/modern-components";
 import { MobilePagination, usePagination } from "@/app/lib/pagination";
 import { useAuthGuard } from "@/app/hooks/useAuthGuard";
+import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
 
 type Worker = {
   id: string;
@@ -23,6 +24,7 @@ const ROLE_OPTIONS: Array<{ value: Worker["role"]; label: string; defaultRate: n
 
 export default function WorkersPage() {
   const { loading: authLoading } = useAuthGuard();
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const [list, setList] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -49,9 +51,8 @@ export default function WorkersPage() {
   async function refresh() {
     setLoading(true);
     try {
-      const res = await fetch("/api/workers", { 
-        cache: "no-store",
-        credentials: "include"
+      const res = await authenticatedFetch("/api/workers", { 
+        cache: "no-store"
       });
       
       if (!res.ok) {
@@ -96,10 +97,9 @@ export default function WorkersPage() {
     if (!isValid) return;
     
     try {
-      const response = await fetch("/api/workers", {
+      const response = await authenticatedFetch("/api/workers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ fullName, role, dailyRateVnd, monthlyAllowanceVnd }),
       });
       

@@ -2,8 +2,10 @@
 import { useState } from "react";
 import { LoadingSpinner, Toast } from "@/app/lib/validation";
 import { PageHeader } from "@/app/lib/navigation";
+import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
 
 export default function BackupPage() {
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
@@ -13,12 +15,12 @@ export default function BackupPage() {
       
       // Fetch all data
       const [workersRes, projectsRes, attendancesRes, receiptsRes, expensesRes, materialsRes] = await Promise.all([
-        fetch("/api/workers", { cache: "no-store" }),
-        fetch("/api/projects", { cache: "no-store" }),
-        fetch("/api/attendances", { cache: "no-store" }),
-        fetch("/api/receipts", { cache: "no-store" }),
-        fetch("/api/expenses", { cache: "no-store" }),
-        fetch("/api/materials", { cache: "no-store" })
+        authenticatedFetch("/api/workers", { cache: "no-store" }),
+        authenticatedFetch("/api/projects", { cache: "no-store" }),
+        authenticatedFetch("/api/attendances", { cache: "no-store" }),
+        authenticatedFetch("/api/receipts", { cache: "no-store" }),
+        authenticatedFetch("/api/expenses", { cache: "no-store" }),
+        authenticatedFetch("/api/materials", { cache: "no-store" })
       ]);
 
       const [workers, projects, attendances, receipts, expenses, materials] = await Promise.all([
@@ -81,7 +83,7 @@ export default function BackupPage() {
 
       if (workers?.length > 0) {
         await Promise.all(workers.map((worker: any) => 
-          fetch("/api/workers", {
+          authenticatedFetch("/api/workers", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(worker)
@@ -91,7 +93,7 @@ export default function BackupPage() {
 
       if (projects?.length > 0) {
         await Promise.all(projects.map((project: any) => 
-          fetch("/api/projects", {
+          authenticatedFetch("/api/projects", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(project)
@@ -101,7 +103,7 @@ export default function BackupPage() {
 
       if (attendances?.length > 0) {
         await Promise.all(attendances.map((attendance: any) => 
-          fetch("/api/attendances", {
+          authenticatedFetch("/api/attendances", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(attendance)
@@ -111,7 +113,7 @@ export default function BackupPage() {
 
       if (receipts?.length > 0) {
         await Promise.all(receipts.map((receipt: any) => 
-          fetch("/api/receipts", {
+          authenticatedFetch("/api/receipts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(receipt)
@@ -121,7 +123,7 @@ export default function BackupPage() {
 
       if (expenses?.length > 0) {
         await Promise.all(expenses.map((expense: any) => 
-          fetch("/api/expenses", {
+          authenticatedFetch("/api/expenses", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(expense)
@@ -131,7 +133,7 @@ export default function BackupPage() {
 
       if (materials?.length > 0) {
         await Promise.all(materials.map((material: any) => 
-          fetch("/api/materials", {
+          authenticatedFetch("/api/materials", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(material)

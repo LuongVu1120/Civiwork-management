@@ -5,6 +5,7 @@ import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
 import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem } from "@/app/lib/modern-components";
 import { MobilePagination, usePagination } from "@/app/lib/pagination";
 import { Toast } from "@/app/lib/validation";
+import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
 
 type Expense = { id: string; date: string; amountVnd: number; category: string; description?: string | null; projectId: string };
 type Project = { id: string; name: string };
@@ -19,6 +20,7 @@ const CATEGORIES = [
 ] as const;
 
 export default function ExpensesPage() {
+  const { authenticatedFetch } = useAuthenticatedFetch();
   const [list, setList] = useState<Expense[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,9 +40,8 @@ export default function ExpensesPage() {
     setLoading(true);
     try {
       const [e, p] = await Promise.all([
-        fetch("/api/expenses", { 
-          cache: "no-store",
-          credentials: "include"
+        authenticatedFetch("/api/expenses", { 
+          cache: "no-store"
         }).then(async res => {
           if (!res.ok) {
             if (res.status === 401) {
@@ -51,9 +52,8 @@ export default function ExpensesPage() {
           }
           return res.json();
         }),
-        fetch("/api/projects", { 
-          cache: "no-store",
-          credentials: "include"
+        authenticatedFetch("/api/projects", { 
+          cache: "no-store"
         }).then(async res => {
           if (!res.ok) {
             if (res.status === 401) {
@@ -102,10 +102,9 @@ export default function ExpensesPage() {
   async function createExpense(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await fetch("/api/expenses", {
+      await authenticatedFetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           date: new Date(date + "T00:00:00.000Z"),
           projectId,
@@ -128,10 +127,9 @@ export default function ExpensesPage() {
     if (!editingExpense) return;
     
     try {
-      await fetch("/api/expenses", {
+      await authenticatedFetch("/api/expenses", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           id: editingExpense.id,
           date: new Date(date + "T00:00:00.000Z"),
@@ -154,9 +152,8 @@ export default function ExpensesPage() {
     if (!confirm("Bạn có chắc chắn muốn xóa chi phí này?")) return;
     
     try {
-      await fetch(`/api/expenses?id=${id}`, {
+      await authenticatedFetch(`/api/expenses?id=${id}`, {
         method: "DELETE",
-        credentials: "include",
       });
       await refresh();
       setToast({ message: "Xóa chi phí thành công!", type: "success" });
