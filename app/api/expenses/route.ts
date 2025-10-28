@@ -3,8 +3,28 @@ import { prisma } from "@/app/lib/prisma";
 import { withMiddleware } from "@/app/lib/middleware";
 
 async function getExpenses(request: NextRequest) {
-  const list = await prisma.expense.findMany({ orderBy: { date: "desc" } });
-  return NextResponse.json(list);
+  const { searchParams } = new URL(request.url);
+  const page = Math.max(1, Number(searchParams.get('page') || '1'));
+  const limit = Math.min(100, Math.max(1, Number(searchParams.get('limit') || '20')));
+  const projectId = searchParams.get('projectId') || undefined;
+  const category = searchParams.get('category') || undefined;
+  const startDate = searchParams.get('startDate');
+  const endDate = searchParams.get('endDate');
+
+  const where: any = {};
+  if (projectId) where.projectId = projectId;
+  if (category) where.category = category as any;
+  if (startDate || endDate) {
+    where.date = {};
+    if (startDate) where.date.gte = new Date(startDate);
+    if (endDate) where.date.lte = new Date(endDate);
+  }
+
+  const [total, list] = await Promise.all([
+    prisma.expense.count({ where }),
+    prisma.expense.findMany({ where, orderBy: { date: 'desc' }, skip: (page-1)*limit, take: limit })
+  ]);
+  return NextResponse.json({ items: list, page, limit, total });
 }
 
 export const GET = withMiddleware(getExpenses, {

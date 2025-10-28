@@ -2,13 +2,16 @@
 import { useEffect, useState } from "react";
 import { formatVnd } from "@/app/lib/format";
 import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
-import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem } from "@/app/lib/modern-components";
+import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem, DebouncedInput, ModernAutocomplete, RHFInput, RHFSelect, RHFAutocomplete } from "@/app/lib/modern-components";
 import { MobilePagination, usePagination } from "@/app/lib/pagination";
+import { usePersistedParams } from "@/app/hooks/usePersistedParams";
 import { Toast } from "@/app/lib/validation";
+import { ConfirmDialog } from "@/app/lib/modern-components";
 import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
+import { useForm } from "react-hook-form";
 
 type Expense = { id: string; date: string; amountVnd: number; category: string; description?: string | null; projectId: string };
-type Project = { id: string; name: string };
+type Project = { id: string; name: string; isCompleted?: boolean };
 
 const CATEGORIES = [
   { value: "WAGE", label: "Lương" },
@@ -23,12 +26,27 @@ export default function ExpensesPage() {
   const { authenticatedFetch } = useAuthenticatedFetch();
   const [list, setList] = useState<Expense[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [showCompletedProjects, setShowCompletedProjects] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const { values: persisted, setParam } = usePersistedParams({
+    q: { type: "string", default: "" },
+    limit: { type: "number", default: 10 },
+    projectIdFilter: { type: "string", default: "" },
+    categoryFilter: { type: "string", default: "" },
+    startDate: { type: "string", default: "" },
+    endDate: { type: "string", default: "" }
+  });
+  const [searchTerm, setSearchTerm] = useState(persisted.q);
+  const [itemsPerPage, setItemsPerPage] = useState(persisted.limit);
+  const [filterProjectId, setFilterProjectId] = useState<string>(persisted.projectIdFilter);
+  const [filterCategory, setFilterCategory] = useState<string>(persisted.categoryFilter);
+  const [startDateFilter, setStartDateFilter] = useState<string>(persisted.startDate);
+  const [endDateFilter, setEndDateFilter] = useState<string>(persisted.endDate);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const [confirmState, setConfirmState] = useState<{ open: boolean; id?: string }>({ open: false });
 
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0,10));
   const [projectId, setProjectId] = useState<string>("");
@@ -36,18 +54,26 @@ export default function ExpensesPage() {
   const [category, setCategory] = useState<string>("MISC");
   const [description, setDescription] = useState<string>("");
 
-  async function refresh() {
+  type ExpenseForm = { date: string; projectId: string; amountVnd: string; category: string; description: string };
+  const { control, handleSubmit, reset, formState: { isSubmitting } } = useForm<ExpenseForm>({
+    defaultValues: { date: new Date().toISOString().slice(0,10), projectId: "", amountVnd: "0", category: "MISC", description: "" }
+  });
+
+  async function refresh(pageParam: number = 1, limitParam: number = itemsPerPage) {
     setLoading(true);
     try {
+      const query = new URLSearchParams({
+        page: String(pageParam),
+        limit: String(limitParam),
+        projectId: filterProjectId || "",
+        category: filterCategory || "",
+        startDate: startDateFilter || "",
+        endDate: endDateFilter || ""
+      });
       const [e, p] = await Promise.all([
-        authenticatedFetch("/api/expenses", { 
-          cache: "no-store"
-        }).then(async res => {
+        authenticatedFetch(`/api/expenses?${query.toString()}`, { cache: "no-store" }).then(async res => {
           if (!res.ok) {
-            if (res.status === 401) {
-              window.location.href = '/auth/login';
-              return [];
-            }
+            if (res.status === 401) { window.location.href = '/auth/login'; return { items: [], total: 0 }; }
             throw new Error(`HTTP ${res.status}: ${res.statusText}`);
           }
           return res.json();
@@ -65,7 +91,8 @@ export default function ExpensesPage() {
           return res.json();
         }),
       ]);
-      setList(e);
+      setList(e.items || e);
+      if (typeof e.total === 'number') setTotalCount(e.total);
       setProjects(p);
       if (!projectId && p[0]) setProjectId(p[0].id);
     } catch (error) {
@@ -78,39 +105,59 @@ export default function ExpensesPage() {
 
   useEffect(() => { refresh(); }, []);
 
-  // Filter expenses based on search
+  // Filter expenses based on search + advanced filters
   const filteredExpenses = list.filter(expense => {
     const categoryLabel = CATEGORIES.find(c => c.value === expense.category)?.label || expense.category;
     const searchLower = searchTerm.toLowerCase();
-    
-    return (
+    const inSearch = (
       categoryLabel.toLowerCase().includes(searchLower) ||
       expense.description?.toLowerCase().includes(searchLower) ||
       new Date(expense.date).toLocaleDateString('vi-VN').includes(searchLower)
     );
+    const inProject = !filterProjectId || expense.projectId === filterProjectId;
+    const inCategory = !filterCategory || expense.category === filterCategory;
+    const d = expense.date.slice(0,10);
+    const afterStart = !startDateFilter || d >= startDateFilter;
+    const beforeEnd = !endDateFilter || d <= endDateFilter;
+    return inSearch && inProject && inCategory && afterStart && beforeEnd;
   });
 
   // Pagination
   const { currentPage, setCurrentPage, totalPages, paginatedItems, startIndex, endIndex, resetPage } = 
-    usePagination(filteredExpenses, itemsPerPage);
+    usePagination(filteredExpenses, itemsPerPage, searchTerm ? undefined : totalCount);
 
-  // Reset to first page when filters change
   useEffect(() => {
-    resetPage();
-  }, [searchTerm, itemsPerPage]);
+    // Server fetch for page/limit/filters (search term vẫn lọc client)
+    refresh(currentPage, itemsPerPage);
+  }, [currentPage, itemsPerPage, filterProjectId, filterCategory, startDateFilter, endDateFilter]);
 
-  async function createExpense(e: React.FormEvent) {
-    e.preventDefault();
+  // Reset to first page when filters change and persist to URL
+  useEffect(() => {
+    setParam("q", searchTerm);
+    setParam("limit", itemsPerPage);
+    setParam("projectIdFilter", filterProjectId || "");
+    setParam("categoryFilter", filterCategory || "");
+    setParam("startDate", startDateFilter || "");
+    setParam("endDate", endDateFilter || "");
+    resetPage();
+  }, [searchTerm, itemsPerPage, filterProjectId, filterCategory, startDateFilter, endDateFilter]);
+
+  async function createExpense(data: ExpenseForm) {
+    const selected = projects.find(p=>p.id===data.projectId);
+    if (selected?.isCompleted) {
+      setToast({ message: "Dự án đã hoàn thành. Không thể thêm chi phí mới.", type: "error" });
+      return;
+    }
     try {
       await authenticatedFetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          date: new Date(date + "T00:00:00.000Z"),
-          projectId,
-          category,
-          amountVnd,
-          description: description || null,
+          date: new Date(data.date + "T00:00:00.000Z"),
+          projectId: data.projectId,
+          category: data.category,
+          amountVnd: Number(data.amountVnd),
+          description: data.description ? data.description : null,
         }),
       });
       resetForm();
@@ -122,9 +169,13 @@ export default function ExpensesPage() {
     }
   }
 
-  async function updateExpense(e: React.FormEvent) {
-    e.preventDefault();
+  async function updateExpense(data: ExpenseForm) {
     if (!editingExpense) return;
+    const selected = projects.find(p=>p.id===data.projectId);
+    if (selected?.isCompleted) {
+      setToast({ message: "Dự án đã hoàn thành. Không thể cập nhật chi phí.", type: "error" });
+      return;
+    }
     
     try {
       await authenticatedFetch("/api/expenses", {
@@ -132,11 +183,11 @@ export default function ExpensesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: editingExpense.id,
-          date: new Date(date + "T00:00:00.000Z"),
-          projectId,
-          category,
-          amountVnd,
-          description: description || null,
+          date: new Date(data.date + "T00:00:00.000Z"),
+          projectId: data.projectId,
+          category: data.category,
+          amountVnd: Number(data.amountVnd),
+          description: data.description ? data.description : null,
         }),
       });
       resetForm();
@@ -149,8 +200,10 @@ export default function ExpensesPage() {
   }
 
   async function deleteExpense(id: string) {
-    if (!confirm("Bạn có chắc chắn muốn xóa chi phí này?")) return;
-    
+    setConfirmState({ open: true, id });
+  }
+
+  async function doDeleteExpense(id: string) {
     try {
       await authenticatedFetch(`/api/expenses?id=${id}`, {
         method: "DELETE",
@@ -164,22 +217,20 @@ export default function ExpensesPage() {
   }
 
   function resetForm() {
-    setDate(new Date().toISOString().slice(0,10));
-    setProjectId("");
-    setAmountVnd(0);
-    setCategory("MISC");
-    setDescription("");
+    reset({ date: new Date().toISOString().slice(0,10), projectId: "", amountVnd: "0", category: "MISC", description: "" });
     setShowAddForm(false);
     setEditingExpense(null);
   }
 
   function startEdit(expense: Expense) {
     setEditingExpense(expense);
-    setDate(expense.date.slice(0,10));
-    setProjectId(expense.projectId);
-    setAmountVnd(expense.amountVnd);
-    setCategory(expense.category);
-    setDescription(expense.description || "");
+    reset({
+      date: expense.date.slice(0,10),
+      projectId: expense.projectId,
+      amountVnd: String(expense.amountVnd),
+      category: expense.category,
+      description: expense.description || ""
+    });
     setShowAddForm(true);
     
     // Auto scroll to form after a short delay to ensure form is rendered
@@ -201,11 +252,23 @@ export default function ExpensesPage() {
 
         {/* Search and Filter */}
         <ModernCard className="mb-6 space-y-3">
-          <ModernInput
+          <DebouncedInput
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onDebouncedChange={setSearchTerm}
             placeholder="Tìm kiếm theo loại chi phí, mô tả hoặc ngày..."
           />
+          <div className="grid grid-cols-2 gap-3">
+            <ModernSelect value={filterProjectId} onChange={e=>setFilterProjectId(e.target.value)}>
+              <option value="">Tất cả dự án</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </ModernSelect>
+            <ModernSelect value={filterCategory} onChange={e=>setFilterCategory(e.target.value)}>
+              <option value="">Tất cả loại</option>
+              {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </ModernSelect>
+            <ModernInput type="date" value={startDateFilter} onChange={e=>setStartDateFilter(e.target.value)} />
+            <ModernInput type="date" value={endDateFilter} onChange={e=>setEndDateFilter(e.target.value)} />
+          </div>
           <ModernSelect
             value={itemsPerPage}
             onChange={e => setItemsPerPage(Number(e.target.value))}
@@ -219,7 +282,7 @@ export default function ExpensesPage() {
 
         {/* Add/Edit Form */}
         {showAddForm && (
-          <ModernForm onSubmit={editingExpense ? updateExpense : createExpense} className="mb-6">
+          <ModernForm onSubmit={handleSubmit(editingExpense ? updateExpense : createExpense)} className="mb-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">
                 {editingExpense ? "Sửa chi phí" : "Thêm chi phí mới"}
@@ -237,52 +300,34 @@ export default function ExpensesPage() {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Ngày</label>
-              <ModernInput 
-                type="date" 
-                value={date} 
-                onChange={e=>setDate(e.target.value)}
-              />
+              <RHFInput control={control} name="date" rules={{ required: true }} type="date" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Dự án</label>
-              <ModernSelect 
-                value={projectId} 
-                onChange={e=>setProjectId(e.target.value)}
-              >
-                <option value="">Chọn dự án...</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </ModernSelect>
+              <RHFAutocomplete
+                control={control}
+                name="projectId"
+                rules={{ required: true }}
+                options={(showCompletedProjects ? projects : projects.filter(p=>!p.isCompleted)).map(p=>({ id: p.id, label: p.name + (p.isCompleted ? " (đã hoàn thành)" : "") }))}
+                placeholder="Chọn dự án..."
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Loại chi phí</label>
-              <ModernSelect 
-                value={category} 
-                onChange={e=>setCategory(e.target.value)}
-              >
+              <RHFSelect control={control} name="category" rules={{ required: true }}>
                 {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-              </ModernSelect>
+              </RHFSelect>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Số tiền (VND)</label>
-              <ModernInput 
-                type="number" 
-                value={amountVnd} 
-                onChange={e=>setAmountVnd(Number(e.target.value))} 
-                placeholder="Ví dụ: 500000"
-                min={0}
-                step={1000}
-              />
+              <RHFInput control={control} name="amountVnd" rules={{ required: true, min: 0 }} type="number" placeholder="Ví dụ: 500000" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>
-              <ModernInput 
-                value={description} 
-                onChange={e=>setDescription(e.target.value)} 
-                placeholder="Mô tả chi phí (tuỳ chọn)"
-              />
+              <RHFInput control={control} name="description" placeholder="Mô tả chi phí (tuỳ chọn)" />
             </div>
             <div className="flex gap-3">
-              <ModernButton type="submit" className="flex-1">
+              <ModernButton type="submit" className="flex-1" disabled={isSubmitting}>
                 {editingExpense ? "Cập nhật" : "Thêm chi phí"}
               </ModernButton>
               <ModernButton 
@@ -393,6 +438,15 @@ export default function ExpensesPage() {
           onClose={() => setToast(null)}
         />
       )}
+      <ConfirmDialog
+        open={confirmState.open}
+        title="Xóa chi phí"
+        message="Bạn có chắc chắn muốn xóa chi phí này?"
+        confirmText="Xóa"
+        cancelText="Hủy"
+        onCancel={() => { setConfirmState({ open: false }); setToast({ message: 'Đã hủy thao tác', type: 'info' }); }}
+        onConfirm={() => { const id = confirmState.id!; setConfirmState({ open: false }); doDeleteExpense(id); }}
+      />
     </div>
   );
 }

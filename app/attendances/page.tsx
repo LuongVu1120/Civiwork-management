@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
 import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
-import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem } from "@/app/lib/modern-components";
+import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem, DebouncedInput, ModernAutocomplete } from "@/app/lib/modern-components";
 import { SkeletonList } from "@/app/lib/skeleton";
 import { MobilePagination, usePagination } from "@/app/lib/pagination";
+import { ConfirmDialog } from "@/app/lib/modern-components";
+import { usePersistedParams } from "@/app/hooks/usePersistedParams";
 import { Toast } from "@/app/lib/validation";
 import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
 
@@ -18,19 +20,34 @@ type Attendance = {
   project?: { id: string; name: string };
 };
 type Worker = { id: string; fullName: string };
-type Project = { id: string; name: string };
+type Project = { id: string; name: string; isCompleted?: boolean };
 
 export default function AttendancesPage() {
   const { authenticatedFetch } = useAuthenticatedFetch();
   const [list, setList] = useState<Attendance[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [showCompletedProjects, setShowCompletedProjects] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const { values: persisted, setParam } = usePersistedParams({
+    q: { type: "string", default: "" },
+    limit: { type: "number", default: 10 },
+    projectIdFilter: { type: "string", default: "" },
+    workerIdFilter: { type: "string", default: "" },
+    startDate: { type: "string", default: "" },
+    endDate: { type: "string", default: "" }
+  });
+  const [searchTerm, setSearchTerm] = useState(persisted.q);
+  const [itemsPerPage, setItemsPerPage] = useState(persisted.limit);
+  const [filterProjectId, setFilterProjectId] = useState<string>(persisted.projectIdFilter);
+  const [filterWorkerId, setFilterWorkerId] = useState<string>(persisted.workerIdFilter);
+  const [startDateFilter, setStartDateFilter] = useState<string>(persisted.startDate);
+  const [endDateFilter, setEndDateFilter] = useState<string>(persisted.endDate);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingAttendance, setEditingAttendance] = useState<Attendance | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const [confirmState, setConfirmState] = useState<{ open: boolean; id?: string }>({ open: false });
 
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0,10));
   const [workerId, setWorkerId] = useState<string>("");
@@ -38,17 +55,23 @@ export default function AttendancesPage() {
   const [dayFraction, setDayFraction] = useState<string>("1.00");
   const [meal, setMeal] = useState<"FULL_DAY" | "HALF_DAY" | "NONE">("FULL_DAY");
 
-  async function refresh() {
+  async function refresh(pageParam: number = 1, limitParam: number = itemsPerPage) {
     setLoading(true);
     try {
+      const query = new URLSearchParams({
+        page: String(pageParam),
+        limit: String(limitParam),
+        projectId: "",
+        workerId: "",
+        startDate: "",
+        endDate: ""
+      });
       const [a, w, p] = await Promise.all([
-        authenticatedFetch("/api/attendances", { 
-          cache: "no-store"
-        }).then(async r => {
+        authenticatedFetch(`/api/attendances?${query.toString()}`, { cache: "no-store" }).then(async r => {
           if (!r.ok) {
             if (r.status === 401) {
               window.location.href = '/auth/login';
-              return [];
+              return { items: [], total: 0 };
             }
             throw new Error(`HTTP ${r.status}: ${r.statusText}`);
           }
@@ -79,7 +102,8 @@ export default function AttendancesPage() {
           return r.json();
         }),
       ]);
-      setList(a);
+      setList(a.items || a);
+      if (typeof a.total === 'number') setTotalCount(a.total);
       setWorkers(w);
       setProjects(p);
       if (!workerId && w[0]) setWorkerId(w[0].id);
@@ -94,33 +118,53 @@ export default function AttendancesPage() {
 
   useEffect(() => { refresh(); }, []);
 
-  // Filter attendances based on search
+  // Filter attendances based on search + advanced filters
   const filteredAttendances = list.filter(attendance => {
     const worker = workers.find(w => w.id === attendance.workerId);
     const project = projects.find(p => p.id === attendance.projectId);
     const searchLower = searchTerm.toLowerCase();
-    
-    return (
+    const inSearch = (
       worker?.fullName.toLowerCase().includes(searchLower) ||
       project?.name.toLowerCase().includes(searchLower) ||
       new Date(attendance.date).toLocaleDateString('vi-VN').includes(searchLower)
     );
+    const inProject = !filterProjectId || attendance.projectId === filterProjectId;
+    const inWorker = !filterWorkerId || attendance.workerId === filterWorkerId;
+    const d = attendance.date.slice(0,10);
+    const afterStart = !startDateFilter || d >= startDateFilter;
+    const beforeEnd = !endDateFilter || d <= endDateFilter;
+    return inSearch && inProject && inWorker && afterStart && beforeEnd;
   });
 
   // Pagination
   const { currentPage, setCurrentPage, totalPages, paginatedItems, startIndex, endIndex, resetPage } = 
-    usePagination(filteredAttendances, itemsPerPage);
+    usePagination(filteredAttendances, itemsPerPage, searchTerm ? undefined : totalCount);
 
-  // Reset to first page when filters change
   useEffect(() => {
+    refresh(currentPage, itemsPerPage);
+  }, [currentPage, itemsPerPage]);
+
+  // Reset to first page when filters change and persist to URL
+  useEffect(() => {
+    setParam("q", searchTerm);
+    setParam("limit", itemsPerPage);
+    setParam("projectIdFilter", filterProjectId || "");
+    setParam("workerIdFilter", filterWorkerId || "");
+    setParam("startDate", startDateFilter || "");
+    setParam("endDate", endDateFilter || "");
     resetPage();
-  }, [searchTerm, itemsPerPage]);
+  }, [searchTerm, itemsPerPage, filterProjectId, filterWorkerId, startDateFilter, endDateFilter]);
 
   async function createAttendance(e: React.FormEvent) {
     e.preventDefault();
     
     if (!workerId || !projectId) {
       alert('Vui lòng chọn công nhân và dự án');
+      return;
+    }
+    const selected = projects.find(p=>p.id===projectId);
+    if (selected?.isCompleted) {
+      setToast({ message: "Dự án đã hoàn thành. Không thể thêm chấm công mới.", type: "error" });
       return;
     }
     
@@ -153,6 +197,11 @@ export default function AttendancesPage() {
       alert('Vui lòng chọn công nhân và dự án');
       return;
     }
+    const selected = projects.find(p=>p.id===projectId);
+    if (selected?.isCompleted) {
+      setToast({ message: "Dự án đã hoàn thành. Không thể sửa thêm chấm công.", type: "error" });
+      return;
+    }
     
     try {
       await authenticatedFetch("/api/attendances", {
@@ -177,8 +226,10 @@ export default function AttendancesPage() {
   }
 
   async function deleteAttendance(id: string) {
-    if (!confirm("Bạn có chắc chắn muốn xóa bản ghi chấm công này?")) return;
-    
+    setConfirmState({ open: true, id });
+  }
+
+  async function doDeleteAttendance(id: string) {
     try {
       await authenticatedFetch(`/api/attendances?id=${id}`, {
         method: "DELETE",
@@ -229,11 +280,23 @@ export default function AttendancesPage() {
 
         {/* Search and Filter */}
         <ModernCard className="mb-6 space-y-3">
-          <ModernInput
+          <DebouncedInput
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onDebouncedChange={setSearchTerm}
             placeholder="Tìm kiếm theo tên công nhân, dự án hoặc ngày..."
           />
+          <div className="grid grid-cols-2 gap-3">
+            <ModernSelect value={filterProjectId} onChange={e=>setFilterProjectId(e.target.value)}>
+              <option value="">Tất cả dự án</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </ModernSelect>
+            <ModernSelect value={filterWorkerId} onChange={e=>setFilterWorkerId(e.target.value)}>
+              <option value="">Tất cả công nhân</option>
+              {workers.map(w => <option key={w.id} value={w.id}>{w.fullName}</option>)}
+            </ModernSelect>
+            <ModernInput type="date" value={startDateFilter} onChange={e=>setStartDateFilter(e.target.value)} />
+            <ModernInput type="date" value={endDateFilter} onChange={e=>setEndDateFilter(e.target.value)} />
+          </div>
           <ModernSelect
             value={itemsPerPage}
             onChange={e => setItemsPerPage(Number(e.target.value))}
@@ -273,23 +336,21 @@ export default function AttendancesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Công nhân</label>
-              <ModernSelect 
-                value={workerId} 
-                onChange={e=>setWorkerId(e.target.value)}
-              >
-                <option value="">Chọn công nhân...</option>
-                {workers.map(w => <option key={w.id} value={w.id}>{w.fullName}</option>)}
-              </ModernSelect>
+              <ModernAutocomplete
+                options={workers.map(w=>({ id: w.id, label: w.fullName }))}
+                value={workerId}
+                onChange={setWorkerId}
+                placeholder="Tìm và chọn công nhân..."
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Dự án</label>
-              <ModernSelect 
-                value={projectId} 
-                onChange={e=>setProjectId(e.target.value)}
-              >
-                <option value="">Chọn dự án...</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </ModernSelect>
+              <ModernAutocomplete
+                options={(showCompletedProjects ? projects : projects.filter(p=>!p.isCompleted)).map(p=>({ id: p.id, label: p.name + (p.isCompleted ? " (đã hoàn thành)" : "") }))}
+                value={projectId}
+                onChange={setProjectId}
+                placeholder="Tìm và chọn dự án..."
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -357,7 +418,9 @@ export default function AttendancesPage() {
                 onChange={e=>setProjectId(e.target.value)}
               >
                 <option value="">Chọn dự án...</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {(showCompletedProjects ? projects : projects.filter(p=>!p.isCompleted)).map(p => (
+                  <option key={p.id} value={p.id}>{p.name}{p.isCompleted ? " (đã hoàn thành)" : ""}</option>
+                ))}
               </ModernSelect>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -481,6 +544,15 @@ export default function AttendancesPage() {
           onClose={() => setToast(null)}
         />
       )}
+      <ConfirmDialog
+        open={confirmState.open}
+        title="Xóa chấm công"
+        message="Bạn có chắc chắn muốn xóa bản ghi chấm công này?"
+        confirmText="Xóa"
+        cancelText="Hủy"
+        onCancel={() => { setConfirmState({ open: false }); setToast({ message: 'Đã hủy thao tác', type: 'info' }); }}
+        onConfirm={() => { const id = confirmState.id!; setConfirmState({ open: false }); doDeleteAttendance(id); }}
+      />
     </div>
   );
 }

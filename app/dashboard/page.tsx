@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { formatVnd } from "@/app/lib/format";
 import { PageHeader } from "@/app/lib/navigation";
-import { ModernCard, ModernButton } from "@/app/lib/modern-components";
+import { ModernCard, ModernButton, ModernSelect } from "@/app/lib/modern-components";
 import { LoadingSpinner, Toast } from "@/app/lib/validation";
 import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
 import { useAuthGuard } from "@/app/hooks/useAuthGuard";
@@ -36,86 +36,32 @@ export default function DashboardPage() {
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
+  const [exportProjectId, setExportProjectId] = useState<string>("");
 
   async function loadDashboardData() {
     setLoading(true);
     try {
-      // Load all data in parallel
-      const [projectsRes, workersRes, attendancesRes, receiptsRes, expensesRes, materialsRes] = await Promise.all([
-        authenticatedFetch("/api/projects", { cache: "no-store" }),
-        authenticatedFetch("/api/workers", { cache: "no-store" }),
-        authenticatedFetch("/api/attendances", { cache: "no-store" }),
-        authenticatedFetch("/api/receipts", { cache: "no-store" }),
-        authenticatedFetch("/api/expenses", { cache: "no-store" }),
-        authenticatedFetch("/api/materials", { cache: "no-store" })
+      const [statsRes, projectsRes] = await Promise.all([
+        authenticatedFetch("/api/dashboard/stats", { cache: "no-store" }),
+        authenticatedFetch("/api/projects", { cache: "no-store" })
       ]);
-
-      const [projects, workers, attendances, receipts, expenses, materials] = await Promise.all([
-        projectsRes.json(),
-        workersRes.json(),
-        attendancesRes.json(),
-        receiptsRes.json(),
-        expensesRes.json(),
-        materialsRes.json()
-      ]);
-
-      // Calculate totals
-      const totalReceipts = receipts.reduce((sum: number, r: any) => sum + r.amountVnd, 0);
-      const totalExpenses = expenses.reduce((sum: number, e: any) => sum + e.amountVnd, 0);
-      const totalMaterials = materials.reduce((sum: number, m: any) => sum + m.totalVnd, 0);
-      const netProfit = totalReceipts - totalExpenses - totalMaterials;
-
+      const statsJson = await statsRes.json();
       setStats({
-        projects: projects.length,
-        workers: workers.length,
-        attendances: attendances.length,
-        receipts: receipts.length,
-        expenses: expenses.length,
-        materials: materials.length,
-        totalReceipts,
-        totalExpenses,
-        totalMaterials,
-        netProfit
+        projects: statsJson.projects,
+        workers: statsJson.workers,
+        attendances: statsJson.attendances,
+        receipts: statsJson.receipts,
+        expenses: statsJson.expenses,
+        materials: statsJson.materials,
+        totalReceipts: statsJson.totalReceipts,
+        totalExpenses: statsJson.totalExpenses,
+        totalMaterials: statsJson.totalMaterials,
+        netProfit: statsJson.netProfit
       });
-
-      // Create recent activities from latest data
-      const activities: RecentActivity[] = [];
-      
-      // Add recent attendances
-      attendances.slice(0, 3).forEach((att: any) => {
-        activities.push({
-          id: att.id,
-          type: 'attendance',
-          description: `Chấm công ${att.worker?.fullName || 'Công nhân'} - ${att.project?.name || 'Dự án'}`,
-          date: att.date
-        });
-      });
-
-      // Add recent receipts
-      receipts.slice(0, 2).forEach((rec: any) => {
-        activities.push({
-          id: rec.id,
-          type: 'receipt',
-          description: `Thu tiền ${rec.project?.name || 'Dự án'}`,
-          date: rec.date,
-          amount: rec.amountVnd
-        });
-      });
-
-      // Add recent expenses
-      expenses.slice(0, 2).forEach((exp: any) => {
-        activities.push({
-          id: exp.id,
-          type: 'expense',
-          description: `Chi phí ${exp.category}`,
-          date: exp.date,
-          amount: exp.amountVnd
-        });
-      });
-
-      // Sort by date and take latest 5
-      activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setRecentActivities(activities.slice(0, 5));
+      setRecentActivities(statsJson.recent);
+      const projectsData = await projectsRes.json();
+      setProjects(projectsData.map((p: any) => ({ id: p.id, name: p.name })));
 
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -213,6 +159,35 @@ export default function DashboardPage() {
                   <span className={`font-bold text-lg ${stats.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {formatVnd(stats.netProfit)}
                   </span>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-1 gap-3">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Xuất Excel theo công trình</label>
+                  <div className="flex gap-2">
+                    <ModernSelect value={exportProjectId} onChange={e=>setExportProjectId(e.target.value)} className="flex-1">
+                      <option value="">Chọn công trình...</option>
+                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </ModernSelect>
+                    <ModernButton
+                      onClick={async ()=>{
+                        if (!exportProjectId) { setToast({ message: 'Vui lòng chọn công trình', type: 'error' }); return; }
+                        try {
+                          const res = await authenticatedFetch(`/api/dashboard/export?projectId=${exportProjectId}`, { cache: 'no-store' });
+                          if (!res.ok) throw new Error('Export failed');
+                          const blob = await res.blob();
+                          const url = window.URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url; a.download = 'civiwork-export.xlsx'; a.click();
+                          window.URL.revokeObjectURL(url);
+                        } catch (e) {
+                          setToast({ message: 'Xuất Excel thất bại', type: 'error' });
+                        }
+                      }}
+                    >
+                      Tải về
+                    </ModernButton>
+                  </div>
                 </div>
               </div>
             </div>

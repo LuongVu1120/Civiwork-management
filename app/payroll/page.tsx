@@ -1,17 +1,23 @@
 "use client";
 import { useEffect, useState } from "react";
 import { formatVnd } from "@/app/lib/format";
-import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
+import { PageHeader } from "@/app/lib/navigation";
 import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
+import { usePersistedParams } from "@/app/hooks/usePersistedParams";
 
 type Worker = { id: string; fullName: string };
 
 export default function PayrollPage() {
   const { authenticatedFetch } = useAuthenticatedFetch();
   const [workers, setWorkers] = useState<Worker[]>([]);
-  const [workerId, setWorkerId] = useState<string>("");
-  const [year, setYear] = useState<number>(new Date().getFullYear());
-  const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
+  const { values: persisted, setParam } = usePersistedParams({
+    workerId: { type: "string", default: "" },
+    year: { type: "number", default: new Date().getFullYear() },
+    month: { type: "number", default: new Date().getMonth() + 1 }
+  });
+  const [workerId, setWorkerId] = useState<string>(persisted.workerId);
+  const [year, setYear] = useState<number>(persisted.year);
+  const [month, setMonth] = useState<number>(persisted.month);
   const [result, setResult] = useState<{ totalDays: number; wageTotalVnd: number; mealTotalVnd: number; allowanceVnd: number; payableVnd: number } | null>(null);
 
   useEffect(() => {
@@ -19,6 +25,13 @@ export default function PayrollPage() {
       .then(r=>r.json())
       .then((w: Worker[]) => { setWorkers(w); if (w[0]) setWorkerId(w[0].id); });
   }, []);
+
+  // Persist selections into URL
+  useEffect(() => {
+    setParam("workerId", workerId || "");
+    setParam("year", year);
+    setParam("month", month);
+  }, [workerId, year, month]);
 
   async function run() {
     if (!workerId) return;

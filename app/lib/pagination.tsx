@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { usePersistedParams } from '@/app/hooks/usePersistedParams';
 
 // Reusable mobile-optimized pagination component
 export function MobilePagination({ 
@@ -112,26 +113,31 @@ export function MobilePagination({
 }
 
 // Hook for pagination logic
-export function usePagination<T>(
-  items: T[],
-  itemsPerPage: number = 10
-) {
-  const [currentPage, setCurrentPage] = useState(1);
+export function usePagination<T>(items: T[], itemsPerPage: number = 10, totalItemsOverride?: number) {
+  const { values, setParam } = usePersistedParams({
+    page: { type: 'number', default: 1 },
+    limit: { type: 'number', default: itemsPerPage }
+  });
 
-  const totalPages = Math.ceil(items.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
+  const currentPage = Math.max(1, values.page);
+  const limit = Math.max(1, values.limit);
+
+  const totalItems = totalItemsOverride ?? items.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / limit));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * limit;
+  const endIndex = startIndex + limit;
   const paginatedItems = items.slice(startIndex, endIndex);
 
-  const resetPage = () => setCurrentPage(1);
+  const setCurrentPage = (page: number) => setParam('page', Math.max(1, page));
+  const resetPage = () => setParam('page', 1);
 
-  return {
-    currentPage,
-    setCurrentPage,
-    totalPages,
-    paginatedItems,
-    startIndex,
-    endIndex,
-    resetPage
-  };
+  // Keep limit in sync when caller changes itemsPerPage prop
+  useEffect(() => {
+    if (limit !== itemsPerPage) {
+      setParam('limit', itemsPerPage);
+    }
+  }, [itemsPerPage]);
+
+  return { currentPage: safePage, setCurrentPage, totalPages, paginatedItems, startIndex, endIndex, resetPage };
 }

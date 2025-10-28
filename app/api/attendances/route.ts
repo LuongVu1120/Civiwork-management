@@ -4,18 +4,37 @@ import { withMiddleware } from "@/app/lib/middleware";
 import { CreateAttendanceSchema } from "@/app/lib/schemas";
 
 async function getAttendances(request: NextRequest) {
-  const attendances = await prisma.attendance.findMany({ 
-    orderBy: { date: "desc" },
-    include: {
-      worker: {
-        select: { id: true, fullName: true }
-      },
-      project: {
-        select: { id: true, name: true }
+  const { searchParams } = new URL(request.url);
+  const page = Math.max(1, Number(searchParams.get('page') || '1'));
+  const limit = Math.min(100, Math.max(1, Number(searchParams.get('limit') || '20')));
+  const projectId = searchParams.get('projectId') || undefined;
+  const workerId = searchParams.get('workerId') || undefined;
+  const startDate = searchParams.get('startDate');
+  const endDate = searchParams.get('endDate');
+
+  const where: any = {};
+  if (projectId) where.projectId = projectId;
+  if (workerId) where.workerId = workerId;
+  if (startDate || endDate) {
+    where.date = {};
+    if (startDate) where.date.gte = new Date(startDate);
+    if (endDate) where.date.lte = new Date(endDate);
+  }
+
+  const [total, attendances] = await Promise.all([
+    prisma.attendance.count({ where }),
+    prisma.attendance.findMany({ 
+      where,
+      orderBy: { date: 'desc' },
+      skip: (page-1)*limit,
+      take: limit,
+      include: {
+        worker: { select: { id: true, fullName: true } },
+        project: { select: { id: true, name: true } }
       }
-    }
-  });
-  return NextResponse.json(attendances);
+    })
+  ]);
+  return NextResponse.json({ items: attendances, page, limit, total });
 }
 
 async function createAttendance(request: NextRequest, validatedData: any) {

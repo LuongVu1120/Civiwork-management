@@ -4,6 +4,7 @@ import { useFormValidation, validationRules, ErrorMessage, LoadingSpinner, Toast
 import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
 import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem } from "@/app/lib/modern-components";
 import { MobilePagination, usePagination } from "@/app/lib/pagination";
+import { usePersistedParams } from "@/app/hooks/usePersistedParams";
 import { useAuthGuard } from "@/app/hooks/useAuthGuard";
 import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
 
@@ -27,13 +28,18 @@ export default function WorkersPage() {
   const { authenticatedFetch } = useAuthenticatedFetch();
   const [list, setList] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterRole, setFilterRole] = useState<Worker["role"] | "ALL">("ALL");
+  const { values: persisted, setParam } = usePersistedParams({
+    q: { type: "string", default: "" },
+    role: { type: "string", default: "ALL" },
+    limit: { type: "number", default: 10 }
+  });
+  const [searchTerm, setSearchTerm] = useState(persisted.q);
+  const [filterRole, setFilterRole] = useState<Worker["role"] | "ALL">(persisted.role as any);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   
   // Pagination state
-  const [itemsPerPage, setItemsPerPage] = useState(10); // 10 items per page for mobile
+  const [itemsPerPage, setItemsPerPage] = useState(persisted.limit); // 10 items per page for mobile
 
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<Worker["role"]>("THO_XAY");
@@ -129,8 +135,11 @@ export default function WorkersPage() {
   const { currentPage, setCurrentPage, totalPages, paginatedItems, startIndex, endIndex, resetPage } = 
     usePagination(filteredWorkers, itemsPerPage);
 
-  // Reset to first page when filters or items per page change
+  // Reset to first page when filters or items per page change and persist to URL
   useEffect(() => {
+    setParam("q", searchTerm);
+    setParam("role", filterRole);
+    setParam("limit", itemsPerPage);
     resetPage();
   }, [searchTerm, filterRole, itemsPerPage]);
 

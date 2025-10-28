@@ -29,6 +29,7 @@
     "react-dom": "19.1.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-react": "^5.29.5",
+    "react-hook-form": "^7.53.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {

@@ -120,6 +120,113 @@ export function ModernInput({
   );
 }
 
+// Debounced input for search fields
+export function DebouncedInput({
+  value,
+  onDebouncedChange,
+  delay = 300,
+  placeholder,
+  className = ""
+}: {
+  value: string;
+  onDebouncedChange: (v: string) => void;
+  delay?: number;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [inner, setInner] = React.useState(value);
+  React.useEffect(() => setInner(value), [value]);
+  React.useEffect(() => {
+    const t = setTimeout(() => {
+      if (inner !== value) onDebouncedChange(inner);
+    }, delay);
+    return () => clearTimeout(t);
+  }, [inner, delay]);
+  return (
+    <ModernInput
+      value={inner}
+      onChange={e=>setInner(e.target.value)}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+}
+
+// Simple autocomplete dropdown
+export function ModernAutocomplete<T extends { id: string; label: string }>({
+  options,
+  value,
+  onChange,
+  placeholder = "",
+  className = ""
+}: {
+  options: T[];
+  value?: string;
+  onChange: (id: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+  const [highlightedIndex, setHighlightedIndex] = React.useState<number>(-1);
+  const listRef = React.useRef<HTMLDivElement | null>(null);
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const filtered = React.useMemo(() => {
+    const q = query.toLowerCase();
+    return options.filter(o => o.label.toLowerCase().includes(q)).slice(0, 20);
+  }, [options, query]);
+  const selected = options.find(o => o.id === value);
+  return (
+    <div className={`relative ${className}`}>
+      <input
+        ref={inputRef}
+        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none"
+        placeholder={placeholder}
+        value={open ? query : (selected?.label || "")}
+        onChange={e=>{ setQuery(e.target.value); setOpen(true); setHighlightedIndex(0);} }
+        onFocus={()=>{ setQuery(""); setOpen(true); setHighlightedIndex(0);} }
+        onBlur={()=>setTimeout(()=>setOpen(false), 150)}
+        onKeyDown={(e)=>{
+          if (!open && (e.key === 'ArrowDown' || e.key === 'Enter')) { setOpen(true); setHighlightedIndex(0); return; }
+          if (!open) return;
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedIndex(i => Math.min((i<0?0:i)+1, filtered.length-1));
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedIndex(i => Math.max((i<=0?0:i-1), 0));
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const item = filtered[highlightedIndex] || filtered[0];
+            if (item) { onChange(item.id); setOpen(false); (e.target as HTMLInputElement).blur(); }
+          } else if (e.key === 'Escape') {
+            setOpen(false);
+          }
+        }}
+      />
+      {open && (
+        <div ref={listRef} className="absolute z-40 mt-1 w-full bg-white rounded-xl shadow-lg border max-h-56 overflow-auto">
+          {filtered.length === 0 ? (
+            <div className="px-4 py-3 text-sm text-gray-500">Không có kết quả</div>
+          ) : (
+            filtered.map((o, idx) => (
+              <button
+                key={o.id}
+                className={`w-full text-left px-4 py-2 ${idx===highlightedIndex ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                onMouseEnter={()=>setHighlightedIndex(idx)}
+                onMouseDown={(e)=>e.preventDefault()}
+                onClick={()=>{ onChange(o.id); setOpen(false); inputRef.current?.blur(); }}
+              >
+                {o.label}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Modern Select Component
 export function ModernSelect({ 
   value, 
@@ -146,6 +253,51 @@ export function ModernSelect({
     >
       {children}
     </select>
+  );
+}
+
+// Controlled inputs adapters for react-hook-form
+export function RHFInput({ control, name, rules, ...rest }: any) {
+  const { Controller } = require('react-hook-form');
+  return (
+    <Controller
+      name={name}
+      control={control}
+      rules={rules}
+      render={({ field, fieldState }: any) => (
+        <ModernInput {...rest} value={field.value ?? ''} onChange={(e)=>field.onChange(e.target.value)} error={!!fieldState.error} />
+      )}
+    />
+  );
+}
+
+export function RHFSelect({ control, name, rules, children, ...rest }: any) {
+  const { Controller } = require('react-hook-form');
+  return (
+    <Controller
+      name={name}
+      control={control}
+      rules={rules}
+      render={({ field, fieldState }: any) => (
+        <ModernSelect {...rest} value={field.value ?? ''} onChange={(e)=>field.onChange(e.target.value)} error={!!fieldState.error}>
+          {children}
+        </ModernSelect>
+      )}
+    />
+  );
+}
+
+export function RHFAutocomplete({ control, name, rules, options, placeholder, className }: any) {
+  const { Controller } = require('react-hook-form');
+  return (
+    <Controller
+      name={name}
+      control={control}
+      rules={rules}
+      render={({ field }: { field: { value: string; onChange: (v: string)=>void } }) => (
+        <ModernAutocomplete options={options} value={field.value} onChange={field.onChange} placeholder={placeholder} className={className} />
+      )}
+    />
   );
 }
 
@@ -207,6 +359,49 @@ export function StatsCard({
       {icon && <div className="text-2xl mb-2">{icon}</div>}
       <div className={`text-sm ${textColor} mb-1`}>{title}</div>
       <div className={`text-2xl font-bold ${textColor}`}>{value}</div>
+    </div>
+  );
+}
+
+// Confirm Dialog Component
+export function ConfirmDialog({
+  open,
+  title = "Xác nhận",
+  message,
+  confirmText = "Xác nhận",
+  cancelText = "Hủy",
+  onConfirm,
+  onCancel
+}: {
+  open: boolean;
+  title?: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-[90%] max-w-sm p-5">
+        <div className="text-lg font-semibold text-gray-900 mb-2">{title}</div>
+        <div className="text-gray-600 mb-5">{message}</div>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50"
+          >
+            {cancelText}
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700"
+          >
+            {confirmText}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

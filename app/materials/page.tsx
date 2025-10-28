@@ -2,8 +2,10 @@
 import { useEffect, useState } from "react";
 import { formatVnd } from "@/app/lib/format";
 import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
-import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem } from "@/app/lib/modern-components";
+import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem, DebouncedInput, ModernAutocomplete } from "@/app/lib/modern-components";
 import { MobilePagination, usePagination } from "@/app/lib/pagination";
+import { usePersistedParams } from "@/app/hooks/usePersistedParams";
+import { ConfirmDialog } from "@/app/lib/modern-components";
 import { Toast } from "@/app/lib/validation";
 import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
 
@@ -17,17 +19,30 @@ type Material = {
   supplier?: string | null;
   project?: { id: string; name: string };
 };
-type Project = { id: string; name: string };
+type Project = { id: string; name: string; isCompleted?: boolean };
 
 export default function MaterialsPage() {
   const { authenticatedFetch } = useAuthenticatedFetch();
   const [list, setList] = useState<Material[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [showCompletedProjects, setShowCompletedProjects] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const { values: persisted, setParam } = usePersistedParams({
+    q: { type: "string", default: "" },
+    limit: { type: "number", default: 10 },
+    projectIdFilter: { type: "string", default: "" },
+    startDate: { type: "string", default: "" },
+    endDate: { type: "string", default: "" }
+  });
+  const [searchTerm, setSearchTerm] = useState(persisted.q);
+  const [itemsPerPage, setItemsPerPage] = useState(persisted.limit);
+  const [filterProjectId, setFilterProjectId] = useState<string>(persisted.projectIdFilter);
+  const [startDateFilter, setStartDateFilter] = useState<string>(persisted.startDate);
+  const [endDateFilter, setEndDateFilter] = useState<string>(persisted.endDate);
   const [showAddForm, setShowAddForm] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const [confirmState, setConfirmState] = useState<{ open: boolean; id?: string }>({ open: false });
 
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0,10));
   const [projectId, setProjectId] = useState<string>("");
@@ -36,17 +51,22 @@ export default function MaterialsPage() {
   const [unitPriceVnd, setUnitPriceVnd] = useState<number>(0);
   const [supplier, setSupplier] = useState<string>("");
 
-  async function refresh() {
+  async function refresh(pageParam: number = 1, limitParam: number = itemsPerPage) {
     setLoading(true);
     try {
+      const query = new URLSearchParams({
+        page: String(pageParam),
+        limit: String(limitParam),
+        projectId: filterProjectId || "",
+        startDate: startDateFilter || "",
+        endDate: endDateFilter || ""
+      });
       const [m, p] = await Promise.all([
-        authenticatedFetch("/api/materials", { 
-          cache: "no-store"
-        }).then(async res => {
+        authenticatedFetch(`/api/materials?${query.toString()}`, { cache: "no-store" }).then(async res => {
           if (!res.ok) {
             if (res.status === 401) {
               window.location.href = '/auth/login';
-              return [];
+              return { items: [], total: 0 };
             }
             throw new Error(`HTTP ${res.status}: ${res.statusText}`);
           }
@@ -65,7 +85,8 @@ export default function MaterialsPage() {
           return res.json();
         }),
       ]);
-      setList(m);
+      setList(m.items || m);
+      if (typeof m.total === 'number') setTotalCount(m.total);
       setProjects(p);
       if (!projectId && p[0]) setProjectId(p[0].id);
     } catch (error) {
@@ -78,25 +99,47 @@ export default function MaterialsPage() {
 
   useEffect(() => { refresh(); }, []);
 
-  // Filter materials based on search
-  const filteredMaterials = list.filter(material => 
-    material.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (material.supplier && material.supplier.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (material.project && material.project.name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // Filter materials based on search + advanced filters
+  const filteredMaterials = list.filter(material => {
+    const searchLower = searchTerm.toLowerCase();
+    const inSearch = (
+      material.itemName.toLowerCase().includes(searchLower) ||
+      (material.supplier && material.supplier.toLowerCase().includes(searchLower)) ||
+      (material.project && material.project.name.toLowerCase().includes(searchLower))
+    );
+    const inProject = !filterProjectId || material.project?.id === filterProjectId;
+    const d = material.date.slice(0,10);
+    const afterStart = !startDateFilter || d >= startDateFilter;
+    const beforeEnd = !endDateFilter || d <= endDateFilter;
+    return inSearch && inProject && afterStart && beforeEnd;
+  });
 
   // Pagination
   const { currentPage, setCurrentPage, totalPages, paginatedItems, startIndex, endIndex, resetPage } = 
-    usePagination(filteredMaterials, itemsPerPage);
+    usePagination(filteredMaterials, itemsPerPage, searchTerm ? undefined : totalCount);
 
-  // Reset to first page when filters change
   useEffect(() => {
+    refresh(currentPage, itemsPerPage);
+  }, [currentPage, itemsPerPage, filterProjectId, startDateFilter, endDateFilter]);
+
+  // Reset to first page when filters change and persist to URL
+  useEffect(() => {
+    setParam("q", searchTerm);
+    setParam("limit", itemsPerPage);
+    setParam("projectIdFilter", filterProjectId || "");
+    setParam("startDate", startDateFilter || "");
+    setParam("endDate", endDateFilter || "");
     resetPage();
-  }, [searchTerm, itemsPerPage]);
+  }, [searchTerm, itemsPerPage, filterProjectId, startDateFilter, endDateFilter]);
 
   async function createMaterial(e: React.FormEvent) {
     e.preventDefault();
     try {
+      const selected = projects.find(p=>p.id===projectId);
+      if (selected?.isCompleted) {
+        setToast({ message: "Dự án đã hoàn thành. Không thể thêm vật tư mới.", type: "error" });
+        return;
+      }
       const totalVnd = quantity * unitPriceVnd;
       await authenticatedFetch("/api/materials", {
         method: "POST",
@@ -131,11 +174,21 @@ export default function MaterialsPage() {
         
         {/* Search and Filter */}
         <ModernCard className="mb-6 space-y-3">
-          <ModernInput
+          <DebouncedInput
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onDebouncedChange={setSearchTerm}
             placeholder="Tìm kiếm theo tên vật tư, nhà cung cấp..."
           />
+          <div className="grid grid-cols-2 gap-3">
+            <ModernAutocomplete
+              options={projects.map(p=>({ id: p.id, label: p.name }))}
+              value={filterProjectId}
+              onChange={setFilterProjectId}
+              placeholder="Lọc theo dự án..."
+            />
+            <ModernInput type="date" value={startDateFilter} onChange={e=>setStartDateFilter(e.target.value)} />
+            <ModernInput type="date" value={endDateFilter} onChange={e=>setEndDateFilter(e.target.value)} />
+          </div>
           <ModernSelect
             value={itemsPerPage}
             onChange={e => setItemsPerPage(Number(e.target.value))}
@@ -155,10 +208,12 @@ export default function MaterialsPage() {
               value={date} 
               onChange={e=>setDate(e.target.value)} 
             />
-            <ModernSelect value={projectId} onChange={e=>setProjectId(e.target.value)}>
-              <option value="">Chọn dự án...</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </ModernSelect>
+            <ModernAutocomplete
+              options={(showCompletedProjects ? projects : projects.filter(p=>!p.isCompleted)).map(p=>({ id: p.id, label: p.name + (p.isCompleted ? " (đã hoàn thành)" : "") }))}
+              value={projectId}
+              onChange={setProjectId}
+              placeholder="Chọn dự án..."
+            />
             <ModernInput 
               value={itemName} 
               onChange={e=>setItemName(e.target.value)} 
@@ -166,22 +221,28 @@ export default function MaterialsPage() {
               required
             />
             <div className="grid grid-cols-2 gap-3">
-              <ModernInput 
-                type="number" 
-                value={quantity} 
-                onChange={e=>setQuantity(Number(e.target.value))} 
-                placeholder="Số lượng"
-                min={0}
-                step={0.01}
-              />
-              <ModernInput 
-                type="number" 
-                value={unitPriceVnd} 
-                onChange={e=>setUnitPriceVnd(Number(e.target.value))} 
-                placeholder="Đơn giá (VND)"
-                min={0}
-                step={1000}
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Số lượng</label>
+                <ModernInput 
+                  type="number" 
+                  value={quantity} 
+                  onChange={e=>setQuantity(Number(e.target.value))} 
+                  placeholder="Ví dụ: 10"
+                  min={0}
+                  step={0.01}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Đơn giá (VND)</label>
+                <ModernInput 
+                  type="number" 
+                  value={unitPriceVnd} 
+                  onChange={e=>setUnitPriceVnd(Number(e.target.value))} 
+                  placeholder="Ví dụ: 500000"
+                  min={0}
+                  step={1000}
+                />
+              </div>
             </div>
             <ModernInput 
               value={supplier} 
@@ -275,6 +336,15 @@ export default function MaterialsPage() {
           onClose={() => setToast(null)}
         />
       )}
+      <ConfirmDialog
+        open={confirmState.open}
+        title="Xóa vật tư"
+        message="Bạn có chắc chắn muốn xóa vật tư này?"
+        confirmText="Xóa"
+        cancelText="Hủy"
+        onCancel={() => { setConfirmState({ open: false }); setToast({ message: 'Đã hủy thao tác', type: 'info' }); }}
+        onConfirm={() => { /* Hiện tại màn vật tư chưa có nút xóa từng dòng; dialog này để sẵn dùng khi bổ sung */ setConfirmState({ open: false }); }}
+      />
     </div>
   );
 }

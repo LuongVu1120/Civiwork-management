@@ -83,6 +83,8 @@ model Project {
   startDate   DateTime?
   endDate     DateTime?
   notes       String?
+  isCompleted Boolean   @default(false)
+  completedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -90,6 +92,8 @@ model Project {
   receipts    Receipt[]
   expenses    Expense[]
   materials   MaterialPurchase[]
+
+  @@index([isCompleted, updatedAt])
 }
 
 // Attendance is the source of truth for prorated wages

@@ -1,29 +1,37 @@
 "use client";
 import { useEffect, useState } from "react";
 import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
-import { ModernCard, ModernButton, ModernInput, ModernForm, ModernListItem, ModernSelect } from "@/app/lib/modern-components";
+import { ModernCard, ModernButton, ModernInput, ModernForm, ModernListItem, ModernSelect, ConfirmDialog, DebouncedInput } from "@/app/lib/modern-components";
 import { MobilePagination, usePagination } from "@/app/lib/pagination";
+import { usePersistedParams } from "@/app/hooks/usePersistedParams";
 import { Toast } from "@/app/lib/validation";
 import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
 
-type Project = { id: string; name: string; clientName?: string | null };
+type Project = { id: string; name: string; clientName?: string | null; isCompleted?: boolean; completedAt?: string | null };
 
 export default function ProjectsPage() {
   const { authenticatedFetch } = useAuthenticatedFetch();
   const [list, setList] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const { values: persisted, setParam } = usePersistedParams({
+    q: { type: "string", default: "" },
+    limit: { type: "number", default: 10 },
+    status: { type: "string", default: "all" }
+  });
+  const [searchTerm, setSearchTerm] = useState(persisted.q);
+  const [itemsPerPage, setItemsPerPage] = useState(persisted.limit);
+  const [status, setStatus] = useState<string>(persisted.status);
   const [name, setName] = useState("");
   const [clientName, setClientName] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const [confirmState, setConfirmState] = useState<{ open: boolean; type: "delete" | "complete" | null; id?: string }>({ open: false, type: null });
 
   async function refresh() {
     setLoading(true);
     try {
-      const res = await authenticatedFetch("/api/projects", { 
+      const res = await authenticatedFetch(`/api/projects?status=${encodeURIComponent(status)}`, { 
         cache: "no-store"
       });
       
@@ -44,7 +52,7 @@ export default function ProjectsPage() {
     }
   }
   
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => { refresh(); }, [status]);
 
   // Filter projects based on search
   const filteredProjects = list.filter(project => 
@@ -56,10 +64,13 @@ export default function ProjectsPage() {
   const { currentPage, setCurrentPage, totalPages, paginatedItems, startIndex, endIndex, resetPage } = 
     usePagination(filteredProjects, itemsPerPage);
 
-  // Reset to first page when filters change
+  // Reset to first page when filters change and persist to URL
   useEffect(() => {
+    setParam("q", searchTerm);
+    setParam("limit", itemsPerPage);
+    setParam("status", status);
     resetPage();
-  }, [searchTerm, itemsPerPage]);
+  }, [searchTerm, itemsPerPage, status]);
 
   async function createProject(e: React.FormEvent) {
     e.preventDefault();
@@ -102,8 +113,10 @@ export default function ProjectsPage() {
   }
 
   async function deleteProject(id: string) {
-    if (!confirm("Bạn có chắc chắn muốn xóa công trình này?")) return;
+    setConfirmState({ open: true, type: "delete", id });
+  }
     
+  async function doDelete(id: string) {
     try {
       await authenticatedFetch(`/api/projects?id=${id}`, {
         method: "DELETE",
@@ -113,6 +126,25 @@ export default function ProjectsPage() {
     } catch (error) {
       console.error('Error deleting project:', error);
       setToast({ message: "Có lỗi xảy ra khi xóa công trình", type: "error" });
+    }
+  }
+
+  async function completeProject(id: string) {
+    setConfirmState({ open: true, type: "complete", id });
+  }
+
+  async function doComplete(id: string) {
+    try {
+      await authenticatedFetch(`/api/projects/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id })
+      });
+      await refresh();
+      setToast({ message: "Đã đánh dấu hoàn thành", type: "success" });
+    } catch (error) {
+      console.error('Error completing project:', error);
+      setToast({ message: "Không thể hoàn thành công trình", type: "error" });
     }
   }
 
@@ -148,11 +180,17 @@ export default function ProjectsPage() {
         
         {/* Search and Filter */}
         <ModernCard className="mb-6 space-y-3">
-          <ModernInput
+          <DebouncedInput
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onDebouncedChange={setSearchTerm}
             placeholder="Tìm kiếm theo tên công trình hoặc chủ đầu tư..."
           />
+          <div className="grid grid-cols-2 gap-3">
+            <ModernSelect value={status} onChange={e=>setStatus(e.target.value)}>
+              <option value="all">Tất cả</option>
+              <option value="active">Đang triển khai</option>
+              <option value="completed">Đã hoàn thành</option>
+            </ModernSelect>
           <ModernSelect
             value={itemsPerPage}
             onChange={e => setItemsPerPage(Number(e.target.value))}
@@ -162,6 +200,7 @@ export default function ProjectsPage() {
             <option value={20}>20/trang</option>
             <option value={50}>50/trang</option>
           </ModernSelect>
+          </div>
         </ModernCard>
 
         {/* Add/Edit Form */}
@@ -238,13 +277,16 @@ export default function ProjectsPage() {
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="font-semibold text-lg text-gray-900 mb-1">{p.name}</div>
+                    <div className="flex items-center gap-2 mb-3">
                     {p.clientName && (
-                      <div className="text-sm text-gray-600 mb-3">
                         <span className="inline-block bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs font-medium">
                           {p.clientName}
                         </span>
+                      )}
+                      {p.isCompleted && (
+                        <span className="inline-block bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full text-xs font-semibold">Đã hoàn thành</span>
+                      )}
                       </div>
-                    )}
                     <div className="mt-3">
                       <a 
                         href={`/projects/${p.id}/cashflow`} 
@@ -269,6 +311,17 @@ export default function ProjectsPage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
+                    {!p.isCompleted && (
+                      <button
+                        onClick={() => completeProject(p.id)}
+                        className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                        title="Hoàn thành"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </button>
+                    )}
                     <button
                       onClick={() => deleteProject(p.id)}
                       className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -308,6 +361,20 @@ export default function ProjectsPage() {
           onClose={() => setToast(null)}
         />
       )}
+      <ConfirmDialog
+        open={confirmState.open}
+        title={confirmState.type === 'delete' ? 'Xóa công trình' : 'Hoàn thành công trình'}
+        message={confirmState.type === 'delete' ? 'Bạn có chắc chắn muốn xóa công trình này?' : 'Đánh dấu công trình này là đã hoàn thành?'}
+        confirmText={confirmState.type === 'delete' ? 'Xóa' : 'Hoàn thành'}
+        cancelText="Hủy"
+        onCancel={() => { setConfirmState({ open: false, type: null }); setToast({ message: 'Đã hủy thao tác', type: 'info' }); }}
+        onConfirm={() => {
+          const id = confirmState.id!;
+          setConfirmState({ open: false, type: null });
+          if (confirmState.type === 'delete') doDelete(id);
+          if (confirmState.type === 'complete') doComplete(id);
+        }}
+      />
     </div>
   );
 }

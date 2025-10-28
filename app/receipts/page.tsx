@@ -2,41 +2,62 @@
 import { useEffect, useState } from "react";
 import { formatVnd } from "@/app/lib/format";
 import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
-import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem } from "@/app/lib/modern-components";
+import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem, DebouncedInput, ModernAutocomplete, RHFInput, RHFAutocomplete } from "@/app/lib/modern-components";
 import { MobilePagination, usePagination } from "@/app/lib/pagination";
+import { usePersistedParams } from "@/app/hooks/usePersistedParams";
 import { Toast } from "@/app/lib/validation";
+import { ConfirmDialog } from "@/app/lib/modern-components";
 import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
+import { useForm } from "react-hook-form";
 
 type Receipt = { id: string; date: string; amountVnd: number; description?: string | null; projectId: string };
-type Project = { id: string; name: string };
+type Project = { id: string; name: string; isCompleted?: boolean };
 
 export default function ReceiptsPage() {
   const { authenticatedFetch } = useAuthenticatedFetch();
   const [list, setList] = useState<Receipt[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [showCompletedProjects, setShowCompletedProjects] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const { values: persisted, setParam } = usePersistedParams({
+    q: { type: "string", default: "" },
+    limit: { type: "number", default: 10 },
+    projectIdFilter: { type: "string", default: "" },
+    startDate: { type: "string", default: "" },
+    endDate: { type: "string", default: "" }
+  });
+  const [searchTerm, setSearchTerm] = useState(persisted.q);
+  const [itemsPerPage, setItemsPerPage] = useState(persisted.limit);
+  const [filterProjectId, setFilterProjectId] = useState<string>(persisted.projectIdFilter);
+  const [startDateFilter, setStartDateFilter] = useState<string>(persisted.startDate);
+  const [endDateFilter, setEndDateFilter] = useState<string>(persisted.endDate);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const [confirmState, setConfirmState] = useState<{ open: boolean; id?: string }>({ open: false });
 
-  const [date, setDate] = useState<string>(new Date().toISOString().slice(0,10));
-  const [projectId, setProjectId] = useState<string>("");
-  const [amountVnd, setAmountVnd] = useState<number>(0);
-  const [description, setDescription] = useState<string>("");
+  type ReceiptForm = { date: string; projectId: string; amountVnd: string; description: string };
+  const { control, handleSubmit, reset, formState: { isSubmitting } } = useForm<ReceiptForm>({
+    defaultValues: { date: new Date().toISOString().slice(0,10), projectId: "", amountVnd: "0", description: "" }
+  });
 
-  async function refresh() {
+  async function refresh(pageParam: number = 1, limitParam: number = itemsPerPage) {
     setLoading(true);
     try {
+      const query = new URLSearchParams({
+        page: String(pageParam),
+        limit: String(limitParam),
+        projectId: "",
+        startDate: "",
+        endDate: ""
+      });
       const [r, p] = await Promise.all([
-        authenticatedFetch("/api/receipts", { 
-          cache: "no-store"
-        }).then(async res => {
+        authenticatedFetch(`/api/receipts?${query.toString()}`, { cache: "no-store" }).then(async res => {
           if (!res.ok) {
             if (res.status === 401) {
               window.location.href = '/auth/login';
-              return [];
+              return { items: [], total: 0 };
             }
             throw new Error(`HTTP ${res.status}: ${res.statusText}`);
           }
@@ -55,9 +76,9 @@ export default function ReceiptsPage() {
           return res.json();
         }),
       ]);
-      setList(r);
+      setList(r.items || r);
+      if (typeof r.total === 'number') setTotalCount(r.total);
       setProjects(p);
-      if (!projectId && p[0]) setProjectId(p[0].id);
     } catch (error) {
       console.error('Error loading receipts:', error);
       setToast({ message: "Có lỗi xảy ra khi tải dữ liệu", type: "error" });
@@ -68,32 +89,53 @@ export default function ReceiptsPage() {
 
   useEffect(() => { refresh(); }, []);
 
-  // Filter receipts based on search
-  const filteredReceipts = list.filter(receipt => 
-    receipt.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    new Date(receipt.date).toLocaleDateString('vi-VN').includes(searchTerm.toLowerCase())
-  );
+  // Filter receipts based on search + advanced filters
+  const filteredReceipts = list.filter(receipt => {
+    const searchLower = searchTerm.toLowerCase();
+    const inSearch = (
+      receipt.description?.toLowerCase().includes(searchLower) ||
+      new Date(receipt.date).toLocaleDateString('vi-VN').includes(searchLower)
+    );
+    const inProject = !filterProjectId || receipt.projectId === filterProjectId;
+    const d = receipt.date.slice(0,10);
+    const afterStart = !startDateFilter || d >= startDateFilter;
+    const beforeEnd = !endDateFilter || d <= endDateFilter;
+    return inSearch && inProject && afterStart && beforeEnd;
+  });
 
   // Pagination
   const { currentPage, setCurrentPage, totalPages, paginatedItems, startIndex, endIndex, resetPage } = 
-    usePagination(filteredReceipts, itemsPerPage);
+    usePagination(filteredReceipts, itemsPerPage, searchTerm ? undefined : totalCount);
 
-  // Reset to first page when filters change
   useEffect(() => {
-    resetPage();
-  }, [searchTerm, itemsPerPage]);
+    refresh(currentPage, itemsPerPage);
+  }, [currentPage, itemsPerPage]);
 
-  async function createReceipt(e: React.FormEvent) {
-    e.preventDefault();
+  // Reset to first page when filters change and persist to URL
+  useEffect(() => {
+    setParam("q", searchTerm);
+    setParam("limit", itemsPerPage);
+    setParam("projectIdFilter", filterProjectId || "");
+    setParam("startDate", startDateFilter || "");
+    setParam("endDate", endDateFilter || "");
+    resetPage();
+  }, [searchTerm, itemsPerPage, filterProjectId, startDateFilter, endDateFilter]);
+
+  async function createReceipt(data: ReceiptForm) {
+    const selected = projects.find(p=>p.id===data.projectId);
+    if (selected?.isCompleted) {
+      setToast({ message: "Dự án đã hoàn thành. Không thể thêm thu tiền mới.", type: "error" });
+      return;
+    }
     try {
       await authenticatedFetch("/api/receipts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          date: new Date(date + "T00:00:00.000Z"),
-          projectId,
-          amountVnd,
-          description: description || null,
+          date: new Date(data.date + "T00:00:00.000Z"),
+          projectId: data.projectId,
+          amountVnd: Number(data.amountVnd),
+          description: data.description ? data.description : null,
         }),
       });
       resetForm();
@@ -105,9 +147,13 @@ export default function ReceiptsPage() {
     }
   }
 
-  async function updateReceipt(e: React.FormEvent) {
-    e.preventDefault();
+  async function updateReceipt(data: ReceiptForm) {
     if (!editingReceipt) return;
+    const selected = projects.find(p=>p.id===data.projectId);
+    if (selected?.isCompleted) {
+      setToast({ message: "Dự án đã hoàn thành. Không thể cập nhật thu tiền.", type: "error" });
+      return;
+    }
     
     try {
       await authenticatedFetch("/api/receipts", {
@@ -115,10 +161,10 @@ export default function ReceiptsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: editingReceipt.id,
-          date: new Date(date + "T00:00:00.000Z"),
-          projectId,
-          amountVnd,
-          description: description || null,
+          date: new Date(data.date + "T00:00:00.000Z"),
+          projectId: data.projectId,
+          amountVnd: Number(data.amountVnd),
+          description: data.description ? data.description : null,
         }),
       });
       resetForm();
@@ -131,8 +177,10 @@ export default function ReceiptsPage() {
   }
 
   async function deleteReceipt(id: string) {
-    if (!confirm("Bạn có chắc chắn muốn xóa bản ghi thu tiền này?")) return;
-    
+    setConfirmState({ open: true, id });
+  }
+
+  async function doDeleteReceipt(id: string) {
     try {
       await authenticatedFetch(`/api/receipts?id=${id}`, {
         method: "DELETE",
@@ -146,20 +194,19 @@ export default function ReceiptsPage() {
   }
 
   function resetForm() {
-    setDate(new Date().toISOString().slice(0,10));
-    setProjectId("");
-    setAmountVnd(0);
-    setDescription("");
+    reset({ date: new Date().toISOString().slice(0,10), projectId: "", amountVnd: "0", description: "" });
     setShowAddForm(false);
     setEditingReceipt(null);
   }
 
   function startEdit(receipt: Receipt) {
     setEditingReceipt(receipt);
-    setDate(receipt.date.slice(0,10));
-    setProjectId(receipt.projectId);
-    setAmountVnd(receipt.amountVnd);
-    setDescription(receipt.description || "");
+    reset({
+      date: receipt.date.slice(0,10),
+      projectId: receipt.projectId,
+      amountVnd: String(receipt.amountVnd),
+      description: receipt.description || ""
+    });
     setShowAddForm(true);
     
     // Auto scroll to form after a short delay to ensure form is rendered
@@ -181,11 +228,21 @@ export default function ReceiptsPage() {
         
         {/* Search and Filter */}
         <ModernCard className="mb-6 space-y-3">
-          <ModernInput
+          <DebouncedInput
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onDebouncedChange={setSearchTerm}
             placeholder="Tìm kiếm theo mô tả hoặc ngày..."
           />
+          <div className="grid grid-cols-2 gap-3">
+            <ModernAutocomplete
+              options={projects.map(p=>({ id: p.id, label: p.name }))}
+              value={filterProjectId}
+              onChange={setFilterProjectId}
+              placeholder="Lọc theo dự án..."
+            />
+            <ModernInput type="date" value={startDateFilter} onChange={e=>setStartDateFilter(e.target.value)} />
+            <ModernInput type="date" value={endDateFilter} onChange={e=>setEndDateFilter(e.target.value)} />
+          </div>
           <ModernSelect
             value={itemsPerPage}
             onChange={e => setItemsPerPage(Number(e.target.value))}
@@ -199,7 +256,7 @@ export default function ReceiptsPage() {
 
         {/* Add/Edit Form */}
         {showAddForm && (
-          <ModernForm onSubmit={editingReceipt ? updateReceipt : createReceipt} className="mb-6">
+          <ModernForm onSubmit={handleSubmit(editingReceipt ? updateReceipt : createReceipt)} className="mb-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">
                 {editingReceipt ? "Sửa bản ghi thu tiền" : "Thêm bản ghi thu tiền mới"}
@@ -217,43 +274,28 @@ export default function ReceiptsPage() {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Ngày</label>
-              <ModernInput 
-                type="date" 
-                value={date} 
-                onChange={e=>setDate(e.target.value)}
-              />
+              <RHFInput control={control} name="date" rules={{ required: true }} type="date" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Dự án</label>
-              <ModernSelect 
-                value={projectId} 
-                onChange={e=>setProjectId(e.target.value)}
-              >
-                <option value="">Chọn dự án...</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </ModernSelect>
+              <RHFAutocomplete
+                control={control}
+                name="projectId"
+                rules={{ required: true }}
+                options={(showCompletedProjects ? projects : projects.filter(p=>!p.isCompleted)).map(p=>({ id: p.id, label: p.name + (p.isCompleted ? " (đã hoàn thành)" : "") }))}
+                placeholder="Chọn dự án..."
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Số tiền (VND)</label>
-              <ModernInput 
-                type="number" 
-                value={amountVnd} 
-                onChange={e=>setAmountVnd(Number(e.target.value))} 
-                placeholder="Ví dụ: 1000000"
-                min={0}
-                step={1000}
-              />
+              <RHFInput control={control} name="amountVnd" rules={{ required: true, min: 0 }} type="number" placeholder="Ví dụ: 1000000" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>
-              <ModernInput 
-                value={description} 
-                onChange={e=>setDescription(e.target.value)} 
-                placeholder="Mô tả thu tiền (tuỳ chọn)"
-              />
+              <RHFInput control={control} name="description" placeholder="Mô tả thu tiền (tuỳ chọn)" />
             </div>
             <div className="flex gap-3">
-              <ModernButton type="submit" className="flex-1">
+              <ModernButton type="submit" className="flex-1" disabled={isSubmitting}>
                 {editingReceipt ? "Cập nhật" : "Thêm thu tiền"}
               </ModernButton>
               <ModernButton 
@@ -360,6 +402,15 @@ export default function ReceiptsPage() {
           onClose={() => setToast(null)}
         />
       )}
+      <ConfirmDialog
+        open={confirmState.open}
+        title="Xóa thu tiền"
+        message="Bạn có chắc chắn muốn xóa bản ghi thu tiền này?"
+        confirmText="Xóa"
+        cancelText="Hủy"
+        onCancel={() => { setConfirmState({ open: false }); setToast({ message: 'Đã hủy thao tác', type: 'info' }); }}
+        onConfirm={() => { const id = confirmState.id!; setConfirmState({ open: false }); doDeleteReceipt(id); }}
+      />
     </div>
   );
 }

@@ -3,7 +3,15 @@ import { prisma } from "@/app/lib/prisma";
 import { withMiddleware } from "@/app/lib/middleware";
 
 async function getProjects(request: NextRequest) {
-  const projects = await prisma.project.findMany({ orderBy: { createdAt: "desc" } });
+  const { searchParams } = new URL(request.url);
+  const status = searchParams.get('status'); // all | active | completed
+  const where =
+    status === 'active'
+      ? { isCompleted: false }
+      : status === 'completed'
+      ? { isCompleted: true }
+      : undefined;
+  const projects = await prisma.project.findMany({ where, orderBy: { createdAt: "desc" } });
   return NextResponse.json(projects);
 }
 
@@ -59,6 +67,29 @@ async function updateProject(request: NextRequest) {
 }
 
 export const PUT = withMiddleware(updateProject, {
+  rateLimit: { requests: 20, windowMs: 15 * 60 * 1000 },
+  requireAuth: true
+});
+
+async function completeProject(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { id } = body;
+    if (!id) {
+      return NextResponse.json({ error: 'ID công trình là bắt buộc' }, { status: 400 });
+    }
+    const updated = await prisma.project.update({
+      where: { id },
+      data: { isCompleted: true, completedAt: new Date() }
+    });
+    return NextResponse.json(updated);
+  } catch (error) {
+    console.error('Error completing project:', error);
+    return NextResponse.json({ error: 'Không thể hoàn thành công trình' }, { status: 500 });
+  }
+}
+
+export const POST_COMPLETE = withMiddleware(completeProject, {
   rateLimit: { requests: 20, windowMs: 15 * 60 * 1000 },
   requireAuth: true
 });
