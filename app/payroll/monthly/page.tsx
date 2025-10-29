@@ -268,7 +268,7 @@ export default function PayrollMonthlyPage() {
           pattern: 'solid',
           fgColor: { argb: 'FFE6E6FA' }
         };
-        detailWs.addRow(["Ngày", "Số ngày", "Dự án", "Bữa ăn", "Ghi chú"]);
+        detailWs.addRow(["Ngày", "Số ngày", "Công trình", "Bữa ăn", "Ghi chú"]);
         
         // Add daily details - với error handling
         if (worker.dailyDetails && worker.dailyDetails.length > 0) {
@@ -504,7 +504,7 @@ export default function PayrollMonthlyPage() {
         
         autoTable(doc, { 
           startY: currentY, 
-          head: [["Ngày", "Số ngày", "Dự án", "Bữa ăn"]], 
+          head: [["Ngày", "Số ngày", "Công trình", "Bữa ăn"]], 
           body: detailRows,
           headStyles: {
             fillColor: [200, 200, 255],
@@ -554,13 +554,13 @@ export default function PayrollMonthlyPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 mx-auto max-w-md">
+    <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 mx-auto max-w-2xl md:max-w-3xl">
       <PageHeader title="Bảng công/thanh toán tháng" />
       <div className="p-4">
         
         {/* Date Selection and Action Buttons */}
         <ModernCard className="mb-6 p-4">
-          <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Năm</label>
               <input 

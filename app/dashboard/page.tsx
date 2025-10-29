@@ -93,7 +93,7 @@ export default function DashboardPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 mx-auto max-w-md">
+      <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 mx-auto max-w-2xl md:max-w-3xl">
         <PageHeader title="Dashboard" />
         <div className="p-4">
           <ModernCard className="text-center py-12">
@@ -106,13 +106,13 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 mx-auto max-w-md">
+    <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 mx-auto max-w-2xl md:max-w-3xl">
       <PageHeader title="Dashboard" />
       <div className="p-4 space-y-6">
         
         {/* Stats Overview */}
         {stats && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <ModernCard className="p-4">
               <div className="text-center">
                 <div className="text-2xl font-bold text-blue-600">{stats.projects}</div>
@@ -197,7 +197,7 @@ export default function DashboardPage() {
         {/* Quick Links */}
         <ModernCard className="p-4">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Truy cập nhanh</h3>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {quickLinks.map((link) => (
               <Link key={link.href} href={link.href}>
                 <ModernButton 

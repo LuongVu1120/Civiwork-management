@@ -144,7 +144,7 @@ export default function WorkersPage() {
   }, [searchTerm, filterRole, itemsPerPage]);
 
   return (
-    <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 mx-auto max-w-md">
+    <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 mx-auto max-w-2xl md:max-w-3xl">
       {toast && (
         <Toast
           message={toast.message}
@@ -163,7 +163,7 @@ export default function WorkersPage() {
             onChange={e => setSearchTerm(e.target.value)}
             placeholder="Tìm kiếm theo tên..."
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <ModernSelect
               value={filterRole}
               onChange={e => setFilterRole(e.target.value as Worker["role"] | "ALL")}
@@ -219,14 +219,14 @@ export default function WorkersPage() {
                   Lương/ngày (VND)
                 </label>
                 <ModernInput
-                  type="number"
-                  value={dailyRateVnd}
-                  onChange={e=>setDailyRateVnd(Number(e.target.value))}
-                  placeholder="Ví dụ: 500000"
+                  type="text"
+                  value={new Intl.NumberFormat('vi-VN').format(Number(dailyRateVnd || 0))}
+                  onChange={e=>{
+                    const digits = e.target.value.replace(/\D/g, '');
+                    setDailyRateVnd(Number(digits || 0));
+                  }}
+                  placeholder="Ví dụ: 500.000"
                   error={!!getError('dailyRateVnd')}
-                  min={0}
-                  max={10000000}
-                  step={1000}
                 />
                 <ErrorMessage error={getError('dailyRateVnd')} />
                 <div className="text-xs text-gray-500 mt-1">
@@ -238,14 +238,14 @@ export default function WorkersPage() {
                   Phụ cấp/tháng (VND)
                 </label>
                 <ModernInput
-                  type="number"
-                  value={monthlyAllowanceVnd}
-                  onChange={e=>setMonthlyAllowanceVnd(Number(e.target.value))}
-                  placeholder="Ví dụ: 1500000"
+                  type="text"
+                  value={new Intl.NumberFormat('vi-VN').format(Number(monthlyAllowanceVnd || 0))}
+                  onChange={e=>{
+                    const digits = e.target.value.replace(/\D/g, '');
+                    setMonthlyAllowanceVnd(Number(digits || 0));
+                  }}
+                  placeholder="Ví dụ: 1.500.000"
                   error={!!getError('monthlyAllowanceVnd')}
-                  min={0}
-                  max={50000000}
-                  step={100000}
                 />
                 <ErrorMessage error={getError('monthlyAllowanceVnd')} />
                 <div className="text-xs text-gray-500 mt-1">

@@ -17,7 +17,7 @@ export default function Error({
 
   return (
     <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-red-50 to-pink-50 flex items-center justify-center p-4">
-      <ModernCard className="max-w-md w-full text-center">
+      <ModernCard className="max-w-2xl md:max-w-3xl w-full text-center">
         <div className="p-6">
           <div className="text-6xl mb-4">⚠️</div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">

@@ -42,16 +42,16 @@ export default function PayrollPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-gray-50 mx-auto max-w-md">
+    <div className="min-h-dvh bg-gray-50 mx-auto max-w-2xl md:max-w-3xl">
       <PageHeader title="Báo cáo lương tháng" />
       <div className="p-4">
-      <div className="bg-white p-3 rounded-xl border shadow-sm mb-4 grid grid-cols-2 gap-2">
-        <select value={workerId} onChange={e=>setWorkerId(e.target.value)} className="border rounded px-3 py-2 col-span-2">
+      <div className="bg-white p-3 rounded-xl border shadow-sm mb-4 grid grid-cols-2 md:grid-cols-4 gap-2">
+        <select value={workerId} onChange={e=>setWorkerId(e.target.value)} className="border rounded px-3 py-2 col-span-2 md:col-span-4">
           {workers.map(w => <option key={w.id} value={w.id}>{w.fullName}</option>)}
         </select>
         <input type="number" value={year} onChange={e=>setYear(Number(e.target.value))} className="border rounded px-3 py-2" />
         <input type="number" min={1} max={12} value={month} onChange={e=>setMonth(Number(e.target.value))} className="border rounded px-3 py-2" />
-        <button onClick={run} className="rounded-lg bg-black text-white py-2 col-span-2">Tính lương</button>
+        <button onClick={run} className="rounded-lg bg-black text-white py-2 col-span-2 md:col-span-4">Tính lương</button>
       </div>
 
       {result && (

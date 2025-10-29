@@ -174,7 +174,7 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 mx-auto max-w-md">
+    <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 mx-auto max-w-2xl md:max-w-3xl">
       <PageHeader title="Công trình" />
       <div className="p-4">
         
@@ -185,7 +185,7 @@ export default function ProjectsPage() {
             onDebouncedChange={setSearchTerm}
             placeholder="Tìm kiếm theo tên công trình hoặc chủ đầu tư..."
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <ModernSelect value={status} onChange={e=>setStatus(e.target.value)}>
               <option value="all">Tất cả</option>
               <option value="active">Đang triển khai</option>

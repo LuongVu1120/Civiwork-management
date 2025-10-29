@@ -38,6 +38,16 @@ export const CreateAttendanceSchema = z.object({
 
 export const UpdateAttendanceSchema = CreateAttendanceSchema.partial();
 
+// Bulk Attendance schema
+export const CreateAttendanceBulkSchema = z.object({
+  date: z.string().datetime('Ngày không hợp lệ'),
+  projectId: z.string().cuid('ID dự án không hợp lệ'),
+  workerIds: z.array(z.string().cuid('ID nhân viên không hợp lệ')).min(1, 'Chọn ít nhất 1 công nhân'),
+  dayFraction: z.number().min(0).max(1, 'Phần ngày phải từ 0 đến 1'),
+  meal: MealOptionSchema,
+  notes: z.string().max(500, 'Ghi chú không được quá 500 ký tự').optional()
+});
+
 // Receipt schemas
 export const CreateReceiptSchema = z.object({
   projectId: z.string().cuid('ID dự án không hợp lệ'),
@@ -116,6 +126,7 @@ export type CreateProjectInput = z.infer<typeof CreateProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof UpdateProjectSchema>;
 export type CreateAttendanceInput = z.infer<typeof CreateAttendanceSchema>;
 export type UpdateAttendanceInput = z.infer<typeof UpdateAttendanceSchema>;
+export type CreateAttendanceBulkInput = z.infer<typeof CreateAttendanceBulkSchema>;
 export type CreateReceiptInput = z.infer<typeof CreateReceiptSchema>;
 export type UpdateReceiptInput = z.infer<typeof UpdateReceiptSchema>;
 export type CreateExpenseInput = z.infer<typeof CreateExpenseSchema>;

@@ -139,7 +139,7 @@ export default function MaterialsPage() {
     try {
       const selected = projects.find(p=>p.id===projectId);
       if (selected?.isCompleted) {
-        setToast({ message: "Dự án đã hoàn thành. Không thể thêm vật tư mới.", type: "error" });
+      setToast({ message: "Công trình đã hoàn thành. Không thể thêm vật tư mới.", type: "error" });
         return;
       }
       const parsedUnitPrice = Number(String(unitPriceVnd).replace(/\D/g, "")) || 0;
@@ -181,7 +181,7 @@ export default function MaterialsPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-orange-50 to-red-50 mx-auto max-w-md">
+    <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-orange-50 to-red-50 mx-auto max-w-2xl md:max-w-3xl">
       <PageHeader title="Vật tư" />
       <div className="p-4">
         
@@ -192,7 +192,7 @@ export default function MaterialsPage() {
             onDebouncedChange={setSearchTerm}
             placeholder="Tìm kiếm theo tên vật tư, nhà cung cấp..."
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <ModernAutocomplete
               options={projects.map(p=>({ id: p.id, label: p.name }))}
               value={filterProjectId}

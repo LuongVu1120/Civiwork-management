@@ -23,7 +23,7 @@ export default function DocsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-dvh bg-gray-50 mx-auto max-w-md">
+      <div className="min-h-dvh bg-gray-50 mx-auto max-w-2xl md:max-w-3xl">
         <PageHeader title="API Documentation" />
         <div className="p-4">
           <div className="text-center py-8">

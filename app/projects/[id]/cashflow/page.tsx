@@ -113,16 +113,16 @@ export default function ProjectCashflowPage({ params, searchParams }: { params: 
 
   const t = data?.totals;
   return (
-    <div className="min-h-dvh bg-gray-50 mx-auto max-w-md">
+    <div className="min-h-dvh bg-gray-50 mx-auto max-w-2xl md:max-w-3xl">
       <PageHeader title="Dòng tiền công trình" />
       <div className="p-4">
-      <div className="bg-white p-3 rounded-xl border shadow-sm mb-3 grid grid-cols-2 gap-2">
-        <select value={selected} onChange={e=>setSelected(e.target.value)} className="border rounded px-2 py-2 col-span-2">
+      <div className="bg-white p-3 rounded-xl border shadow-sm mb-3 grid grid-cols-2 md:grid-cols-4 gap-2">
+        <select value={selected} onChange={e=>setSelected(e.target.value)} className="border rounded px-2 py-2 col-span-2 md:col-span-4">
           {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
         <input type="number" value={year} onChange={e=>setYear(Number(e.target.value))} className="border rounded px-2 py-2" />
         <input type="number" min={1} max={12} value={month} onChange={e=>setMonth(Number(e.target.value))} className="border rounded px-2 py-2" />
-        <button onClick={load} className="rounded bg-black text-white py-2 col-span-2">Làm mới</button>
+        <button onClick={load} className="rounded bg-black text-white py-2 col-span-2 md:col-span-4">Làm mới</button>
         <button 
           onClick={async () => {
             try {
@@ -137,7 +137,7 @@ export default function ProjectCashflowPage({ params, searchParams }: { params: 
               alert('❌ Không thể kiểm tra database health.');
             }
           }}
-          className="rounded bg-blue-500 text-white py-2 col-span-2"
+          className="rounded bg-blue-500 text-white py-2 col-span-2 md:col-span-4"
         >
           Kiểm tra Database
         </button>

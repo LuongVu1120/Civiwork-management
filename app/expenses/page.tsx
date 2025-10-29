@@ -145,7 +145,7 @@ export default function ExpensesPage() {
   async function createExpense(data: ExpenseForm) {
     const selected = projects.find(p=>p.id===data.projectId);
     if (selected?.isCompleted) {
-      setToast({ message: "Dự án đã hoàn thành. Không thể thêm chi phí mới.", type: "error" });
+      setToast({ message: "Công trình đã hoàn thành. Không thể thêm chi phí mới.", type: "error" });
       return;
     }
     try {
@@ -156,7 +156,7 @@ export default function ExpensesPage() {
           date: new Date(data.date + "T00:00:00.000Z"),
           projectId: data.projectId,
           category: data.category,
-          amountVnd: Number(data.amountVnd),
+          amountVnd: Number(String(data.amountVnd).replace(/\D/g, "")),
           description: data.description ? data.description : null,
         }),
       });
@@ -173,7 +173,7 @@ export default function ExpensesPage() {
     if (!editingExpense) return;
     const selected = projects.find(p=>p.id===data.projectId);
     if (selected?.isCompleted) {
-      setToast({ message: "Dự án đã hoàn thành. Không thể cập nhật chi phí.", type: "error" });
+      setToast({ message: "Công trình đã hoàn thành. Không thể cập nhật chi phí.", type: "error" });
       return;
     }
     
@@ -186,7 +186,7 @@ export default function ExpensesPage() {
           date: new Date(data.date + "T00:00:00.000Z"),
           projectId: data.projectId,
           category: data.category,
-          amountVnd: Number(data.amountVnd),
+          amountVnd: Number(String(data.amountVnd).replace(/\D/g, "")),
           description: data.description ? data.description : null,
         }),
       });
@@ -246,7 +246,7 @@ export default function ExpensesPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-red-50 to-pink-50 mx-auto max-w-md">
+    <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-red-50 to-pink-50 mx-auto max-w-2xl md:max-w-3xl">
       <PageHeader title="Chi tiền" />
       <div className="p-4">
 
@@ -257,7 +257,7 @@ export default function ExpensesPage() {
             onDebouncedChange={setSearchTerm}
             placeholder="Tìm kiếm theo loại chi phí, mô tả hoặc ngày..."
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <ModernSelect value={filterProjectId} onChange={e=>setFilterProjectId(e.target.value)}>
               <option value="">Tất cả dự án</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -303,7 +303,7 @@ export default function ExpensesPage() {
               <RHFInput control={control} name="date" rules={{ required: true }} type="date" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Dự án</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Công trình</label>
               <RHFAutocomplete
                 control={control}
                 name="projectId"
@@ -320,7 +320,18 @@ export default function ExpensesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Số tiền (VND)</label>
-              <RHFInput control={control} name="amountVnd" rules={{ required: true, min: 0 }} type="number" placeholder="Ví dụ: 500000" />
+              <RHFInput 
+                control={control} 
+                name="amountVnd" 
+                rules={{ required: true, min: 0 }} 
+                type="text" 
+                inputMode="numeric"
+                placeholder="Ví dụ: 500.000" 
+                onChange={(e: any) => {
+                  const digits = String(e.target.value || '').replace(/\D/g, '');
+                  e.target.value = new Intl.NumberFormat('vi-VN').format(Number(digits || 0));
+                }}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>

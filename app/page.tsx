@@ -45,7 +45,7 @@ export default function Home() {
 
   return (
     <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 p-4">
-      <main className="mx-auto max-w-md">
+      <main className="mx-auto max-w-2xl md:max-w-3xl">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
             CiviWork
@@ -55,7 +55,7 @@ export default function Home() {
             Xin chào, <span className="font-semibold text-gray-700">{user.fullName}</span>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {links.map((l) => (
             <a 
               key={l.href} 

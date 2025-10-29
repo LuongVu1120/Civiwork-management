@@ -124,7 +124,7 @@ export default function ReceiptsPage() {
   async function createReceipt(data: ReceiptForm) {
     const selected = projects.find(p=>p.id===data.projectId);
     if (selected?.isCompleted) {
-      setToast({ message: "Dự án đã hoàn thành. Không thể thêm thu tiền mới.", type: "error" });
+      setToast({ message: "Công trình đã hoàn thành. Không thể thêm thu tiền mới.", type: "error" });
       return;
     }
     try {
@@ -134,7 +134,7 @@ export default function ReceiptsPage() {
         body: JSON.stringify({
           date: new Date(data.date + "T00:00:00.000Z"),
           projectId: data.projectId,
-          amountVnd: Number(data.amountVnd),
+          amountVnd: Number(String(data.amountVnd).replace(/\D/g, "")),
           description: data.description ? data.description : null,
         }),
       });
@@ -151,7 +151,7 @@ export default function ReceiptsPage() {
     if (!editingReceipt) return;
     const selected = projects.find(p=>p.id===data.projectId);
     if (selected?.isCompleted) {
-      setToast({ message: "Dự án đã hoàn thành. Không thể cập nhật thu tiền.", type: "error" });
+      setToast({ message: "Công trình đã hoàn thành. Không thể cập nhật thu tiền.", type: "error" });
       return;
     }
     
@@ -163,7 +163,7 @@ export default function ReceiptsPage() {
           id: editingReceipt.id,
           date: new Date(data.date + "T00:00:00.000Z"),
           projectId: data.projectId,
-          amountVnd: Number(data.amountVnd),
+          amountVnd: Number(String(data.amountVnd).replace(/\D/g, "")),
           description: data.description ? data.description : null,
         }),
       });
@@ -204,7 +204,7 @@ export default function ReceiptsPage() {
     reset({
       date: receipt.date.slice(0,10),
       projectId: receipt.projectId,
-      amountVnd: String(receipt.amountVnd),
+      amountVnd: new Intl.NumberFormat('vi-VN').format(receipt.amountVnd),
       description: receipt.description || ""
     });
     setShowAddForm(true);
@@ -222,7 +222,7 @@ export default function ReceiptsPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-green-50 to-emerald-50 mx-auto max-w-md">
+    <div className="min-h-dvh bg-gradient-to-br from-gray-50 via-green-50 to-emerald-50 mx-auto max-w-2xl md:max-w-3xl">
       <PageHeader title="Thu tiền" />
       <div className="p-4">
         
@@ -233,7 +233,7 @@ export default function ReceiptsPage() {
             onDebouncedChange={setSearchTerm}
             placeholder="Tìm kiếm theo mô tả hoặc ngày..."
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <ModernAutocomplete
               options={projects.map(p=>({ id: p.id, label: p.name }))}
               value={filterProjectId}
@@ -277,7 +277,7 @@ export default function ReceiptsPage() {
               <RHFInput control={control} name="date" rules={{ required: true }} type="date" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Dự án</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Công trình</label>
               <RHFAutocomplete
                 control={control}
                 name="projectId"
@@ -288,7 +288,18 @@ export default function ReceiptsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Số tiền (VND)</label>
-              <RHFInput control={control} name="amountVnd" rules={{ required: true, min: 0 }} type="number" placeholder="Ví dụ: 1000000" />
+              <RHFInput 
+                control={control} 
+                name="amountVnd" 
+                rules={{ required: true, min: 0 }} 
+                type="text" 
+                inputMode="numeric"
+                placeholder="Ví dụ: 1.000.000" 
+                onChange={(e: any) => {
+                  const digits = String(e.target.value || '').replace(/\D/g, '');
+                  e.target.value = new Intl.NumberFormat('vi-VN').format(Number(digits || 0));
+                }}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>

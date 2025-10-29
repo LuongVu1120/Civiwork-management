@@ -153,7 +153,7 @@ export default function BackupPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-gray-50 mx-auto max-w-md">
+    <div className="min-h-dvh bg-gray-50 mx-auto max-w-2xl md:max-w-3xl">
       {toast && (
         <Toast 
           message={toast.message} 
@@ -215,7 +215,7 @@ export default function BackupPage() {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <a href="/dashboard" className="bg-gray-600 text-white p-3 rounded-xl text-center font-medium">
             Dashboard
           </a>

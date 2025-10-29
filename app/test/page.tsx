@@ -36,7 +36,7 @@ export default function TestPage() {
   };
 
   return (
-    <div className="min-h-dvh bg-gray-50 mx-auto max-w-md">
+    <div className="min-h-dvh bg-gray-50 mx-auto max-w-2xl md:max-w-3xl">
       <PageHeader title="System Test" />
       
       <div className="p-4 space-y-4">
