@@ -13,7 +13,9 @@ type Material = {
   id: string; 
   date: string; 
   itemName: string; 
-  quantity: number; 
+  quantity?: number; 
+  unit?: string | null;
+  quantityText?: string;
   unitPriceVnd: number; 
   totalVnd: number; 
   supplier?: string | null;
@@ -47,8 +49,8 @@ export default function MaterialsPage() {
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0,10));
   const [projectId, setProjectId] = useState<string>("");
   const [itemName, setItemName] = useState<string>("");
-  const [quantity, setQuantity] = useState<number>(0);
-  const [unitPriceVnd, setUnitPriceVnd] = useState<number>(0);
+  const [quantity, setQuantity] = useState<string>("0");
+  const [unitPriceVnd, setUnitPriceVnd] = useState<string>("0");
   const [supplier, setSupplier] = useState<string>("");
 
   async function refresh(pageParam: number = 1, limitParam: number = itemsPerPage) {
@@ -140,7 +142,16 @@ export default function MaterialsPage() {
         setToast({ message: "Dự án đã hoàn thành. Không thể thêm vật tư mới.", type: "error" });
         return;
       }
-      const totalVnd = quantity * unitPriceVnd;
+      const parsedUnitPrice = Number(String(unitPriceVnd).replace(/\D/g, "")) || 0;
+      const quantityMatch = String(quantity).match(/^\s*([\d.,]+)\s*(.*)$/);
+      const rawQty = quantityMatch ? quantityMatch[1] : String(quantity);
+      const unitLabel = quantityMatch ? (quantityMatch[2] || '').trim() : '';
+      const normalizedQty = rawQty.replace(/,/g, '.').replace(/[^0-9.]/g, '');
+      const parts = normalizedQty.split('.');
+      const parsedQuantity = parts.length > 2 
+        ? Number(parts.slice(0, -1).join('') + '.' + parts[parts.length - 1]) 
+        : Number(normalizedQty || '0');
+      const totalVnd = parsedUnitPrice; // giá tổng cho toàn bộ số lượng
       await authenticatedFetch("/api/materials", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -148,15 +159,17 @@ export default function MaterialsPage() {
           date: new Date(date + "T00:00:00.000Z"),
           projectId,
           itemName,
-          quantity,
-          unitPriceVnd,
+          quantity: parsedQuantity,
+          unit: unitLabel || null,
+          quantityText: rawQty,
+          unitPriceVnd: parsedUnitPrice,
           totalVnd,
           supplier: supplier || null,
         }),
       });
       setItemName("");
-      setQuantity(0);
-      setUnitPriceVnd(0);
+      setQuantity("0");
+      setUnitPriceVnd("0");
       setSupplier("");
       setShowAddForm(false);
       await refresh();
@@ -224,23 +237,23 @@ export default function MaterialsPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Số lượng</label>
                 <ModernInput 
-                  type="number" 
-                  value={quantity} 
-                  onChange={e=>setQuantity(Number(e.target.value))} 
-                  placeholder="Ví dụ: 10"
-                  min={0}
-                  step={0.01}
+                  type="text" 
+                  value={quantity}
+                  onChange={e=>setQuantity(e.target.value)} 
+                  placeholder="Ví dụ: 10 tấn hoặc 12.5 m3"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Đơn giá (VND)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Giá tổng (VND)</label>
                 <ModernInput 
-                  type="number" 
-                  value={unitPriceVnd} 
-                  onChange={e=>setUnitPriceVnd(Number(e.target.value))} 
-                  placeholder="Ví dụ: 500000"
-                  min={0}
-                  step={1000}
+                  type="text" 
+                  value={unitPriceVnd}
+                  onChange={e=>{
+                    const digits = e.target.value.replace(/\D/g, "");
+                    const formatted = new Intl.NumberFormat('vi-VN').format(Number(digits || 0));
+                    setUnitPriceVnd(formatted);
+                  }} 
+                  placeholder="Ví dụ: 12.000.000"
                 />
               </div>
             </div>
@@ -294,7 +307,7 @@ export default function MaterialsPage() {
                 <div className="text-sm text-gray-600 space-y-1">
                   <div className="flex justify-between">
                     <span>Số lượng:</span>
-                    <span className="font-medium">{m.quantity}</span>
+                    <span className="font-medium">{m.quantityText ? `${m.quantityText}${m.unit ? ` ${m.unit}` : ''}` : (m.unit ? `${m.quantity} ${m.unit}` : String(m.quantity))}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Đơn giá:</span>

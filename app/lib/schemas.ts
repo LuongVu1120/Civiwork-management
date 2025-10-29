@@ -71,8 +71,8 @@ export const CreateMaterialSchema = z.object({
   date: z.string().datetime('Ngày không hợp lệ'),
   itemName: z.string().min(1, 'Tên vật tư là bắt buộc').max(200, 'Tên vật tư không được quá 200 ký tự'),
   unit: z.string().max(20, 'Đơn vị không được quá 20 ký tự').optional(),
-  quantity: z.number().min(0, 'Số lượng phải >= 0').max(1000000, 'Số lượng quá cao'),
-  unitPriceVnd: z.number().int().min(0, 'Đơn giá phải >= 0').max(100000000, 'Đơn giá quá cao'),
+  quantityText: z.string().min(1, 'Số lượng là bắt buộc'),
+  unitPriceVnd: z.number().int().min(0, 'Giá tổng phải >= 0').max(10000000000, 'Giá tổng quá cao'),
   totalVnd: z.number().int().min(0, 'Tổng tiền phải >= 0').max(10000000000, 'Tổng tiền quá cao'),
   supplier: z.string().max(100, 'Tên nhà cung cấp không được quá 100 ký tự').optional()
 });

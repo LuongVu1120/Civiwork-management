@@ -43,12 +43,12 @@ async function handler(request: NextRequest) {
     ]);
   });
   const sheet3 = workbook.addWorksheet("Vật tư");
-  sheet3.addRow(["Ngày", "Tên", "SL", "Đơn giá", "Tổng tiền", "Nhà cung cấp"]);
+  sheet3.addRow(["Ngày", "Tên", "Số lượng", "Giá tổng", "Tổng tiền", "Nhà cung cấp"]);
   materials.forEach(m => {
     sheet3.addRow([
       new Date(m.date).toLocaleDateString("vi-VN"),
       m.itemName,
-      Number(m.quantity),
+      (m.quantityText ? (m.unit ? `${m.quantityText} ${m.unit}` : m.quantityText) : (m.unit ? `${Number(m.quantity)} ${m.unit}` : String(m.quantity))),
       m.unitPriceVnd,
       m.totalVnd,
       m.supplier || ""

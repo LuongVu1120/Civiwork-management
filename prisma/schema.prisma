@@ -105,7 +105,8 @@ model MaterialPurchase {
   date         DateTime
   itemName     String
   unit         String?
-  quantity     Decimal   @db.Decimal(10, 2)
+  quantity     Decimal?  @db.Decimal(10, 2)
+  quantityText String    @default("")
   unitPriceVnd Int
   totalVnd     Int
   supplier     String?

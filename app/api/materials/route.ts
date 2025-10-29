@@ -33,7 +33,20 @@ export const GET = withMiddleware(getMaterials, {
 async function createMaterial(request: NextRequest) {
   try {
     const body = await request.json();
-    const created = await prisma.materialPurchase.create({ data: body });
+    // Normalize expected fields for new schema
+    const data: any = {
+      projectId: body.projectId,
+      date: new Date(body.date),
+      itemName: body.itemName,
+      unit: body.unit ?? null,
+      quantityText: body.quantityText ?? String(body.quantity ?? ''),
+      // keep numeric quantity if provided for legacy compatibility
+      quantity: typeof body.quantity === 'number' ? body.quantity : null,
+      unitPriceVnd: Number(body.unitPriceVnd) || 0,
+      totalVnd: Number(body.totalVnd) || Number(body.unitPriceVnd) || 0,
+      supplier: body.supplier ?? null
+    };
+    const created = await prisma.materialPurchase.create({ data });
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
     console.error('Error creating material:', error);
