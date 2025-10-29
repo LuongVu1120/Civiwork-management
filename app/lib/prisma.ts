@@ -11,13 +11,6 @@ export const prisma: PrismaClient = global.prismaGlobal ?? new PrismaClient({
     db: {
       url: process.env.DATABASE_URL
     }
-  },
-  // Connection pooling configuration
-  __internal: {
-    engine: {
-      connectTimeout: 60000,
-      queryTimeout: 60000,
-    }
   }
 });
 
@@ -26,15 +19,41 @@ if (process.env.NODE_ENV !== "production") {
   global.prismaGlobal = prisma;
 }
 
-// Connection health check
-export async function checkDatabaseConnection(): Promise<boolean> {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    return true;
-  } catch (error) {
-    console.error('Database connection failed:', error);
-    return false;
+// Connection health check with retry
+export async function checkDatabaseConnection(retries = 3): Promise<boolean> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      return true;
+    } catch (error) {
+      console.error(`Database connection attempt ${i + 1} failed:`, error);
+      if (i === retries - 1) {
+        console.error('All database connection attempts failed');
+        return false;
+      }
+      // Wait before retry (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+    }
   }
+  return false;
+}
+
+// Retry wrapper for database operations
+export async function withRetry<T>(
+  operation: () => Promise<T>,
+  retries = 3,
+  delay = 1000
+): Promise<T> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await operation();
+    } catch (error) {
+      console.error(`Operation attempt ${i + 1} failed:`, error);
+      if (i === retries - 1) throw error;
+      await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
+    }
+  }
+  throw new Error('All retry attempts failed');
 }
 
 // Database statistics
