@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useFormValidation, validationRules, ErrorMessage, LoadingSpinner, Toast } from "@/app/lib/validation";
 import { PageHeader, FloatingActionButton } from "@/app/lib/navigation";
-import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem } from "@/app/lib/modern-components";
+import { ModernCard, ModernButton, ModernInput, ModernSelect, ModernForm, ModernListItem, ConfirmDialog } from "@/app/lib/modern-components";
 import { MobilePagination, usePagination } from "@/app/lib/pagination";
 import { usePersistedParams } from "@/app/hooks/usePersistedParams";
 import { useAuthGuard } from "@/app/hooks/useAuthGuard";
@@ -37,6 +37,8 @@ export default function WorkersPage() {
   const [filterRole, setFilterRole] = useState<Worker["role"] | "ALL">(persisted.role as any);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingWorker, setEditingWorker] = useState<Worker | null>(null);
+  const [confirmState, setConfirmState] = useState<{ open: boolean; id?: string }>({ open: false });
   
   // Pagination state
   const [itemsPerPage, setItemsPerPage] = useState(persisted.limit); // 10 items per page for mobile
@@ -122,6 +124,78 @@ export default function WorkersPage() {
     }
   }
 
+  async function updateWorker(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingWorker) return;
+    clearErrors();
+    const isValid = validate(
+      { fullName, dailyRateVnd, monthlyAllowanceVnd },
+      {
+        fullName: validationRules.required("Họ tên"),
+        dailyRateVnd: validationRules.minValue(0, "Lương ngày"),
+        monthlyAllowanceVnd: validationRules.minValue(0, "Phụ cấp tháng")
+      }
+    );
+    if (!isValid) return;
+
+    try {
+      const response = await authenticatedFetch("/api/workers", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingWorker.id,
+          fullName,
+          role,
+          dailyRateVnd,
+          monthlyAllowanceVnd
+        })
+      });
+      if (!response.ok) throw new Error("Có lỗi xảy ra khi cập nhật nhân sự");
+      setToast({ message: "Cập nhật nhân sự thành công!", type: "success" });
+      resetForm();
+      await refresh();
+    } catch (error) {
+      setToast({ message: error instanceof Error ? error.message : "Có lỗi xảy ra", type: "error" });
+    }
+  }
+
+  function startEdit(w: Worker) {
+    setEditingWorker(w);
+    setFullName(w.fullName);
+    setRole(w.role);
+    setDailyRateVnd(w.dailyRateVnd);
+    setMonthlyAllowanceVnd(w.monthlyAllowanceVnd);
+    setShowAddForm(true);
+    setTimeout(() => {
+      const form = document.querySelector('form');
+      if (form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }
+
+  function resetForm() {
+    setFullName("");
+    setRole("THO_XAY");
+    setDailyRateVnd(ROLE_OPTIONS.find(r=>r.value==="THO_XAY")!.defaultRate);
+    setMonthlyAllowanceVnd(ROLE_OPTIONS.find(r=>r.value==="THO_XAY")!.defaultAllowance);
+    setEditingWorker(null);
+    setShowAddForm(false);
+  }
+
+  function confirmDelete(id: string) {
+    setConfirmState({ open: true, id });
+  }
+
+  async function doDelete(id: string) {
+    try {
+      const res = await authenticatedFetch(`/api/workers?id=${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Không thể xóa nhân sự");
+      setToast({ message: "Xóa nhân sự thành công!", type: "success" });
+      await refresh();
+    } catch (error) {
+      setToast({ message: error instanceof Error ? error.message : "Có lỗi xảy ra", type: "error" });
+    }
+  }
+
   // Filter workers based on search and role filter
   const filteredWorkers = useMemo(() => {
     return list.filter(worker => {
@@ -185,12 +259,12 @@ export default function WorkersPage() {
           </div>
         </ModernCard>
 
-        {/* Add Form */}
+        {/* Add/Edit Form */}
         {showAddForm && (
-          <ModernForm onSubmit={createWorker} className="mb-6">
+          <ModernForm onSubmit={editingWorker ? updateWorker : createWorker} className="mb-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Họ tên <span className="text-red-500">*</span>
+                {editingWorker ? "Sửa họ tên" : "Họ tên"} <span className="text-red-500">*</span>
               </label>
               <ModernInput
                 value={fullName}
@@ -256,12 +330,12 @@ export default function WorkersPage() {
 
             <div className="flex gap-3">
               <ModernButton type="submit" className="flex-1">
-                Thêm nhân sự
+                {editingWorker ? "Cập nhật nhân sự" : "Thêm nhân sự"}
               </ModernButton>
               <ModernButton 
                 type="button" 
                 variant="secondary"
-                onClick={() => setShowAddForm(false)}
+                onClick={resetForm}
               >
                 Hủy
               </ModernButton>
@@ -293,19 +367,45 @@ export default function WorkersPage() {
           ) : (
             paginatedItems.map(w => (
               <ModernListItem key={w.id} className="hover:scale-105">
-                <div className="font-semibold text-lg text-gray-900 mb-1">{w.fullName}</div>
-                <div className="text-sm text-gray-600">
-                  <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium mr-2">
-                    {ROLE_OPTIONS.find(r => r.value === w.role)?.label}
-                  </span>
-                  <span className="text-gray-500">
-                    {w.dailyRateVnd.toLocaleString()}đ/ngày
-                  </span>
-                  {w.monthlyAllowanceVnd > 0 && (
-                    <span className="text-gray-500 ml-2">
-                      · Phụ cấp {w.monthlyAllowanceVnd.toLocaleString()}đ/tháng
-                    </span>
-                  )}
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+                  <div>
+                    <div className="font-semibold text-lg text-gray-900 mb-1">{w.fullName}</div>
+                    <div className="text-sm text-gray-600">
+                      <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium mr-2">
+                        {ROLE_OPTIONS.find(r => r.value === w.role)?.label}
+                      </span>
+                      <span className="text-gray-500">
+                        {w.dailyRateVnd.toLocaleString()}đ/ngày
+                      </span>
+                      {w.monthlyAllowanceVnd > 0 && (
+                        <span className="text-gray-500 ml-2">
+                          · Phụ cấp {w.monthlyAllowanceVnd.toLocaleString()}đ/tháng
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 w-full sm:w-auto">
+                    <button
+                      onClick={() => startEdit(w)}
+                      className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors w-full sm:w-auto"
+                      title="Sửa nhân sự"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      <span>Sửa</span>
+                    </button>
+                    <button
+                      onClick={() => confirmDelete(w.id)}
+                      className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors w-full sm:w-auto"
+                      title="Xóa nhân sự"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      <span>Xóa</span>
+                    </button>
+                  </div>
                 </div>
               </ModernListItem>
             ))
@@ -333,6 +433,15 @@ export default function WorkersPage() {
           onClose={() => setToast(null)}
         />
       )}
+      <ConfirmDialog
+        open={confirmState.open}
+        title="Xóa nhân sự"
+        message="Bạn có chắc chắn muốn xóa nhân sự này?"
+        confirmText="Xóa"
+        cancelText="Hủy"
+        onCancel={() => setConfirmState({ open: false })}
+        onConfirm={() => { const id = confirmState.id!; setConfirmState({ open: false }); doDelete(id); }}
+      />
     </div>
   );
 }

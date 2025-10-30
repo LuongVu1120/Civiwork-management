@@ -94,35 +94,6 @@ export const POST_COMPLETE = withMiddleware(completeProject, {
   requireAuth: true
 });
 
-async function deleteProject(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-    
-    if (!id) {
-      return NextResponse.json(
-        { error: "ID công trình là bắt buộc" }, 
-        { status: 400 }
-      );
-    }
-
-    await prisma.project.delete({
-      where: { id }
-    });
-    
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting project:', error);
-    return NextResponse.json(
-      { error: "Không thể xóa công trình" }, 
-      { status: 500 }
-    );
-  }
-}
-
-export const DELETE = withMiddleware(deleteProject, {
-  rateLimit: { requests: 20, windowMs: 15 * 60 * 1000 },
-  requireAuth: true
-});
+// Xóa công trình đã được loại bỏ theo yêu cầu: không xuất DELETE endpoint
 
 

@@ -45,6 +45,7 @@ export default function MaterialsPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [confirmState, setConfirmState] = useState<{ open: boolean; id?: string }>({ open: false });
+  const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
 
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0,10));
   const [projectId, setProjectId] = useState<string>("");
@@ -152,10 +153,8 @@ export default function MaterialsPage() {
         ? Number(parts.slice(0, -1).join('') + '.' + parts[parts.length - 1]) 
         : Number(normalizedQty || '0');
       const totalVnd = parsedUnitPrice; // giá tổng cho toàn bộ số lượng
-      await authenticatedFetch("/api/materials", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const endpoint = "/api/materials";
+      const payload = {
           date: new Date(date + "T00:00:00.000Z"),
           projectId,
           itemName,
@@ -165,18 +164,56 @@ export default function MaterialsPage() {
           unitPriceVnd: parsedUnitPrice,
           totalVnd,
           supplier: supplier || null,
-        }),
+      } as any;
+
+      await authenticatedFetch(endpoint, {
+        method: editingMaterial ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editingMaterial ? { id: editingMaterial.id, ...payload } : payload),
       });
-      setItemName("");
-      setQuantity("0");
-      setUnitPriceVnd("0");
-      setSupplier("");
-      setShowAddForm(false);
+      resetForm();
       await refresh();
-      setToast({ message: "Thêm vật liệu thành công!", type: "success" });
+      setToast({ message: editingMaterial ? "Cập nhật vật tư thành công!" : "Thêm vật liệu thành công!", type: "success" });
     } catch (error) {
       console.error('Error creating material:', error);
       setToast({ message: "Có lỗi xảy ra khi thêm vật liệu", type: "error" });
+    }
+  }
+
+  function startEdit(m: Material) {
+    setEditingMaterial(m);
+    setDate(m.date.slice(0,10));
+    setProjectId(m.project?.id || projectId);
+    setItemName(m.itemName);
+    setQuantity(m.quantityText || String(m.quantity ?? "0"));
+    setUnitPriceVnd(new Intl.NumberFormat('vi-VN').format(Number(m.unitPriceVnd || 0)));
+    setSupplier(m.supplier || "");
+    setShowAddForm(true);
+    setTimeout(() => {
+      const form = document.querySelector('form');
+      if (form) form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }
+
+  function resetForm() {
+    setItemName("");
+    setQuantity("0");
+    setUnitPriceVnd("0");
+    setSupplier("");
+    setEditingMaterial(null);
+    setShowAddForm(false);
+  }
+
+  function confirmDelete(id: string) { setConfirmState({ open: true, id }); }
+
+  async function doDelete(id: string) {
+    try {
+      const res = await authenticatedFetch(`/api/materials?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Không thể xóa vật tư');
+      setToast({ message: 'Đã xóa vật tư', type: 'success' });
+      await refresh();
+    } catch (error) {
+      setToast({ message: error instanceof Error ? error.message : 'Có lỗi xảy ra', type: 'error' });
     }
   }
 
@@ -213,7 +250,7 @@ export default function MaterialsPage() {
           </ModernSelect>
         </ModernCard>
 
-        {/* Add Form */}
+        {/* Add/Edit Form */}
         {showAddForm && (
           <ModernForm onSubmit={createMaterial} className="mb-6">
             <ModernInput 
@@ -264,12 +301,12 @@ export default function MaterialsPage() {
             />
             <div className="flex gap-3">
               <ModernButton type="submit" className="flex-1">
-                Thêm vật tư
+                {editingMaterial ? 'Cập nhật vật tư' : 'Thêm vật tư'}
               </ModernButton>
               <ModernButton 
                 type="button" 
                 variant="secondary"
-                onClick={() => setShowAddForm(false)}
+                onClick={resetForm}
               >
                 Hủy
               </ModernButton>
@@ -298,30 +335,56 @@ export default function MaterialsPage() {
           ) : (
             paginatedItems.map(m => (
               <ModernListItem key={m.id} className="hover:scale-105">
-                <div className="font-semibold text-lg text-gray-900 mb-1">
-                  {m.itemName}
-                </div>
-                <div className="text-sm text-gray-600 mb-2">
-                  {new Date(m.date).toLocaleDateString('vi-VN')}
-                </div>
-                <div className="text-sm text-gray-600 space-y-1">
-                  <div className="flex justify-between">
-                    <span>Số lượng:</span>
-                    <span className="font-medium">{m.quantityText ? `${m.quantityText}${m.unit ? ` ${m.unit}` : ''}` : (m.unit ? `${m.quantity} ${m.unit}` : String(m.quantity))}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Đơn giá:</span>
-                    <span className="font-medium">{formatVnd(m.unitPriceVnd)}</span>
-                  </div>
-                  <div className="flex justify-between font-semibold text-orange-600">
-                    <span>Tổng tiền:</span>
-                    <span>{formatVnd(m.totalVnd)}</span>
-                  </div>
-                  {m.supplier && (
-                    <div className="text-xs text-gray-500">
-                      Nhà cung cấp: {m.supplier}
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+                  <div className="flex-1">
+                    <div className="font-semibold text-lg text-gray-900 mb-1">
+                      {m.itemName}
                     </div>
-                  )}
+                    <div className="text-sm text-gray-600 mb-2">
+                      {new Date(m.date).toLocaleDateString('vi-VN')}
+                    </div>
+                    <div className="text-sm text-gray-600 space-y-1">
+                      <div className="flex justify-between">
+                        <span>Số lượng:</span>
+                        <span className="font-medium">{m.quantityText ? `${m.quantityText}${m.unit ? ` ${m.unit}` : ''}` : (m.unit ? `${m.quantity} ${m.unit}` : String(m.quantity))}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Đơn giá:</span>
+                        <span className="font-medium">{formatVnd(m.unitPriceVnd)}</span>
+                      </div>
+                      <div className="flex justify-between font-semibold text-orange-600">
+                        <span>Tổng tiền:</span>
+                        <span>{formatVnd(m.totalVnd)}</span>
+                      </div>
+                      {m.supplier && (
+                        <div className="text-xs text-gray-500">
+                          Nhà cung cấp: {m.supplier}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 w-full sm:w-auto">
+                    <button
+                      onClick={() => startEdit(m)}
+                      className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors w-full sm:w-auto"
+                      title="Sửa vật tư"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      <span>Sửa</span>
+                    </button>
+                    <button
+                      onClick={() => confirmDelete(m.id)}
+                      className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors w-full sm:w-auto"
+                      title="Xóa vật tư"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      <span>Xóa</span>
+                    </button>
+                  </div>
                 </div>
               </ModernListItem>
             ))
@@ -356,7 +419,7 @@ export default function MaterialsPage() {
         confirmText="Xóa"
         cancelText="Hủy"
         onCancel={() => { setConfirmState({ open: false }); setToast({ message: 'Đã hủy thao tác', type: 'info' }); }}
-        onConfirm={() => { /* Hiện tại màn vật tư chưa có nút xóa từng dòng; dialog này để sẵn dùng khi bổ sung */ setConfirmState({ open: false }); }}
+        onConfirm={() => { const id = confirmState.id!; setConfirmState({ open: false }); doDelete(id); }}
       />
     </div>
   );

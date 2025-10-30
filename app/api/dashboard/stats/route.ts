@@ -5,11 +5,11 @@ import { withMiddleware } from "@/app/lib/middleware";
 async function handler(_req: NextRequest) {
   const [projectsCount, workersCount, attendancesCount, receiptsAgg, expensesAgg, materialsAgg] = await Promise.all([
     prisma.project.count(),
-    prisma.worker.count(),
+    prisma.worker.count({ where: { isActive: true } }),
     prisma.attendance.count(),
     prisma.receipt.aggregate({ _sum: { amountVnd: true }, _count: true }),
     prisma.expense.aggregate({ _sum: { amountVnd: true }, _count: true }),
-    prisma.materialPurchase.aggregate({ _sum: { totalVnd: true }, _count: true })
+    prisma.materialPurchase.aggregate({ where: { isActive: true }, _sum: { totalVnd: true }, _count: true })
   ]);
 
   const totalReceipts = receiptsAgg._sum.amountVnd ?? 0;
@@ -20,7 +20,7 @@ async function handler(_req: NextRequest) {
   const [recentReceipts, recentExpenses, recentMaterials, recentAttendances] = await Promise.all([
     prisma.receipt.findMany({ orderBy: { date: "desc" }, take: 2, include: { project: true } }),
     prisma.expense.findMany({ orderBy: { date: "desc" }, take: 2 }),
-    prisma.materialPurchase.findMany({ orderBy: { date: "desc" }, take: 1 }),
+    prisma.materialPurchase.findMany({ where: { isActive: true }, orderBy: { date: "desc" }, take: 1 }),
     prisma.attendance.findMany({ orderBy: { date: "desc" }, take: 3, include: { project: true, worker: true } })
   ]);
 

@@ -18,7 +18,20 @@ async function getMonthlyPayroll(request: NextRequest) {
       return NextResponse.json({ error: "Tháng phải từ 1-12" }, { status: 400 });
     }
 
-    const workers = await prisma.worker.findMany({ where: { isActive: true } });
+    const monthStart = new Date(Date.UTC(year, month - 1, 1));
+    const monthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+
+    // Bao gồm cả nhân sự đã xóa mềm nếu có dữ liệu trong tháng
+    const workers = await prisma.worker.findMany({
+      where: {
+        OR: [
+          { isActive: true },
+          { attendances: { some: { date: { gte: monthStart, lte: monthEnd } } } },
+          { payrolls: { some: { year, month } } }
+        ]
+      },
+      orderBy: { fullName: 'asc' }
+    });
 
     if (workers.length === 0) {
       return NextResponse.json({ 
