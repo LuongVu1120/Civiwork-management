@@ -23,7 +23,10 @@ export const GET = withMiddleware(getProjects, {
 async function createProject(request: NextRequest) {
   try {
     const body = await request.json();
-    const created = await prisma.project.create({ data: body });
+    const data: any = { ...body };
+    if (body.startDate) data.startDate = new Date(body.startDate);
+    if (body.endDate) data.endDate = new Date(body.endDate);
+    const created = await prisma.project.create({ data });
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
     console.error('Error creating project:', error);
@@ -51,10 +54,10 @@ async function updateProject(request: NextRequest) {
       );
     }
 
-    const updated = await prisma.project.update({
-      where: { id },
-      data: updateData
-    });
+    const data: any = { ...updateData };
+    if (updateData.startDate !== undefined) data.startDate = updateData.startDate ? new Date(updateData.startDate) : null;
+    if (updateData.endDate !== undefined) data.endDate = updateData.endDate ? new Date(updateData.endDate) : null;
+    const updated = await prisma.project.update({ where: { id }, data });
     
     return NextResponse.json(updated);
   } catch (error) {

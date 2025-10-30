@@ -11,7 +11,7 @@ async function completeProject(request: NextRequest) {
     }
     const updated = await prisma.project.update({
       where: { id },
-      data: { isCompleted: true, completedAt: new Date() } as any
+      data: { isCompleted: true, endDate: new Date() }
     });
     return NextResponse.json(updated);
   } catch (error) {

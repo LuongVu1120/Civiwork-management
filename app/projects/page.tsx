@@ -7,7 +7,7 @@ import { usePersistedParams } from "@/app/hooks/usePersistedParams";
 import { Toast } from "@/app/lib/validation";
 import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
 
-type Project = { id: string; name: string; clientName?: string | null; isCompleted?: boolean; completedAt?: string | null };
+type Project = { id: string; name: string; clientName?: string | null; isCompleted?: boolean; startDate?: string | null; endDate?: string | null };
 
 export default function ProjectsPage() {
   const { authenticatedFetch } = useAuthenticatedFetch();
@@ -23,6 +23,7 @@ export default function ProjectsPage() {
   const [status, setStatus] = useState<string>(persisted.status);
   const [name, setName] = useState("");
   const [clientName, setClientName] = useState("");
+  const [startDate, setStartDate] = useState<string>("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
@@ -78,7 +79,7 @@ export default function ProjectsPage() {
       await authenticatedFetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, clientName: clientName || null }),
+        body: JSON.stringify({ name, clientName: clientName || null, startDate: startDate || null }),
       });
       resetForm();
       await refresh();
@@ -101,6 +102,7 @@ export default function ProjectsPage() {
           id: editingProject.id,
           name,
           clientName: clientName || null,
+          startDate: startDate || null,
         }),
       });
       resetForm();
@@ -136,6 +138,7 @@ export default function ProjectsPage() {
   function resetForm() {
     setName("");
     setClientName("");
+    setStartDate("");
     setShowAddForm(false);
     setEditingProject(null);
   }
@@ -144,6 +147,7 @@ export default function ProjectsPage() {
     setEditingProject(project);
     setName(project.name);
     setClientName(project.clientName || "");
+    setStartDate(project.startDate ? project.startDate.slice(0,10) : "");
     setShowAddForm(true);
     
     // Auto scroll to form after a short delay to ensure form is rendered
@@ -223,6 +227,14 @@ export default function ProjectsPage() {
                 placeholder="Chủ đầu tư (tuỳ chọn)" 
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Ngày bắt đầu</label>
+              <ModernInput 
+                type="date"
+                value={startDate}
+                onChange={e=>setStartDate(e.target.value)}
+              />
+            </div>
             <div className="flex gap-3">
               <ModernButton type="submit" className="flex-1">
                 {editingProject ? "Cập nhật" : "Thêm công trình"}
@@ -268,10 +280,16 @@ export default function ProjectsPage() {
                           {p.clientName}
                         </span>
                       )}
-                      {p.isCompleted && (
-                        <span className="inline-block bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full text-xs font-semibold">Đã hoàn thành</span>
+                      {p.isCompleted && p.endDate && (
+                        <span className="inline-block bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full text-xs font-semibold">Đã hoàn thành: {new Date(p.endDate).toLocaleDateString('vi-VN')}</span>
                       )}
                       </div>
+                    {(p.startDate || p.endDate) && (
+                      <div className="text-xs text-gray-500 space-x-2">
+                        {p.startDate && <span>Bắt đầu: {new Date(p.startDate).toLocaleDateString('vi-VN')}</span>}
+                        {p.endDate && <span>Kết thúc: {new Date(p.endDate).toLocaleDateString('vi-VN')}</span>}
+                      </div>
+                    )}
                     <div className="mt-3">
                       <a 
                         href={`/projects/${p.id}/cashflow`} 
@@ -301,12 +319,12 @@ export default function ProjectsPage() {
                       <button
                         onClick={() => completeProject(p.id)}
                         className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors w-full sm:w-auto"
-                        title="Đóng công trình"
+                        title="Hoàn thành công trình"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
-                        <span>Đóng công trình</span>
+                        <span>Hoàn thành</span>
                       </button>
                     )}
                   </div>

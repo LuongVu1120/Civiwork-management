@@ -61,6 +61,8 @@ async function handler(request: NextRequest) {
   const totalExpenses = expenses.reduce((s, e) => s + e.amountVnd, 0);
   const totalMaterials = materials.reduce((s, m) => s + m.totalVnd, 0);
   sumSheet.addRow(["Công trình", project.name]);
+  if (project.startDate) sumSheet.addRow(["Ngày bắt đầu", new Date(project.startDate as any).toLocaleDateString("vi-VN")]);
+  if (project.endDate) sumSheet.addRow(["Ngày đóng", new Date(project.endDate as any).toLocaleDateString("vi-VN")]);
   sumSheet.addRow(["Tổng thu", totalReceipts]);
   sumSheet.addRow(["Tổng chi", totalExpenses]);
   sumSheet.addRow(["Vật tư", totalMaterials]);
