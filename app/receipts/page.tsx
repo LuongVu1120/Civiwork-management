@@ -48,9 +48,9 @@ export default function ReceiptsPage() {
       const query = new URLSearchParams({
         page: String(pageParam),
         limit: String(limitParam),
-        projectId: "",
-        startDate: "",
-        endDate: ""
+        projectId: filterProjectId || "",
+        startDate: startDateFilter || "",
+        endDate: endDateFilter || ""
       });
       const [r, p] = await Promise.all([
         authenticatedFetch(`/api/receipts?${query.toString()}`, { cache: "no-store" }).then(async res => {
@@ -89,18 +89,13 @@ export default function ReceiptsPage() {
 
   useEffect(() => { refresh(); }, []);
 
-  // Filter receipts based on search + advanced filters
+  // Chỉ lọc theo ô tìm kiếm (các bộ lọc khác đã áp dụng ở server)
   const filteredReceipts = list.filter(receipt => {
     const searchLower = searchTerm.toLowerCase();
-    const inSearch = (
+    return (
       receipt.description?.toLowerCase().includes(searchLower) ||
       new Date(receipt.date).toLocaleDateString('vi-VN').includes(searchLower)
     );
-    const inProject = !filterProjectId || receipt.projectId === filterProjectId;
-    const d = receipt.date.slice(0,10);
-    const afterStart = !startDateFilter || d >= startDateFilter;
-    const beforeEnd = !endDateFilter || d <= endDateFilter;
-    return inSearch && inProject && afterStart && beforeEnd;
   });
 
   // Pagination

@@ -62,10 +62,10 @@ export default function AttendancesPage() {
       const query = new URLSearchParams({
         page: String(pageParam),
         limit: String(limitParam),
-        projectId: "",
-        workerId: "",
-        startDate: "",
-        endDate: ""
+        projectId: filterProjectId || "",
+        workerId: filterWorkerId || "",
+        startDate: startDateFilter || "",
+        endDate: endDateFilter || ""
       });
       const [a, w, p] = await Promise.all([
         authenticatedFetch(`/api/attendances?${query.toString()}`, { cache: "no-store" }).then(async r => {
@@ -118,22 +118,16 @@ export default function AttendancesPage() {
 
   useEffect(() => { refresh(); }, []);
 
-  // Filter attendances based on search + advanced filters
+  // Chỉ lọc theo ô tìm kiếm ở client; các bộ lọc khác đã áp dụng ở server
   const filteredAttendances = list.filter(attendance => {
-    const worker = workers.find(w => w.id === attendance.workerId);
-    const project = projects.find(p => p.id === attendance.projectId);
+    const worker = (attendance as any).worker || workers.find(w => w.id === attendance.workerId);
+    const project = (attendance as any).project || projects.find(p => p.id === attendance.projectId);
     const searchLower = searchTerm.toLowerCase();
-    const inSearch = (
+    return (
       worker?.fullName.toLowerCase().includes(searchLower) ||
       project?.name.toLowerCase().includes(searchLower) ||
       new Date(attendance.date).toLocaleDateString('vi-VN').includes(searchLower)
     );
-    const inProject = !filterProjectId || attendance.projectId === filterProjectId;
-    const inWorker = !filterWorkerId || attendance.workerId === filterWorkerId;
-    const d = attendance.date.slice(0,10);
-    const afterStart = !startDateFilter || d >= startDateFilter;
-    const beforeEnd = !endDateFilter || d <= endDateFilter;
-    return inSearch && inProject && inWorker && afterStart && beforeEnd;
   });
 
   // Pagination

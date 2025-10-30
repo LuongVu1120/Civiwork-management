@@ -5,14 +5,19 @@ import { withMiddleware } from "@/app/lib/middleware";
 async function getProjects(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const status = searchParams.get('status'); // all | active | completed
+  const page = Math.max(1, Number(searchParams.get('page') || '1'));
+  const limit = Math.min(100, Math.max(1, Number(searchParams.get('limit') || '20')));
   const where =
     status === 'active'
       ? { isCompleted: false }
       : status === 'completed'
       ? { isCompleted: true }
       : undefined;
-  const projects = await prisma.project.findMany({ where, orderBy: { createdAt: "desc" } });
-  return NextResponse.json(projects);
+  const [total, projects] = await Promise.all([
+    prisma.project.count({ where }),
+    prisma.project.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page-1)*limit, take: limit })
+  ]);
+  return NextResponse.json({ items: projects, page, limit, total });
 }
 
 export const GET = withMiddleware(getProjects, {
@@ -83,7 +88,7 @@ async function completeProject(request: NextRequest) {
     }
     const updated = await prisma.project.update({
       where: { id },
-      data: { isCompleted: true, completedAt: new Date() }
+      data: { isCompleted: true, endDate: new Date() }
     });
     return NextResponse.json(updated);
   } catch (error) {

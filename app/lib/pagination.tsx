@@ -127,7 +127,8 @@ export function usePagination<T>(items: T[], itemsPerPage: number = 10, totalIte
   const safePage = Math.min(currentPage, totalPages);
   const startIndex = (safePage - 1) * limit;
   const endIndex = startIndex + limit;
-  const paginatedItems = items.slice(startIndex, endIndex);
+  // Nếu caller truyền totalItemsOverride, coi như items đã được phân trang ở server → không slice lần nữa
+  const paginatedItems = totalItemsOverride !== undefined ? items : items.slice(startIndex, endIndex);
 
   const setCurrentPage = (page: number) => setParam('page', Math.max(1, page));
   const resetPage = () => setParam('page', 1);

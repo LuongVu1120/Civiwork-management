@@ -29,10 +29,17 @@ export default function ProjectsPage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [confirmState, setConfirmState] = useState<{ open: boolean; type: "complete" | null; id?: string }>({ open: false, type: null });
 
-  async function refresh() {
+  const [totalCount, setTotalCount] = useState(0);
+
+  async function refresh(pageParam: number = 1, limitParam: number = itemsPerPage) {
     setLoading(true);
     try {
-      const res = await authenticatedFetch(`/api/projects?status=${encodeURIComponent(status)}`, { 
+      const query = new URLSearchParams({
+        page: String(pageParam),
+        limit: String(limitParam),
+        status
+      });
+      const res = await authenticatedFetch(`/api/projects?${query.toString()}`, { 
         cache: "no-store"
       });
       
@@ -43,8 +50,9 @@ export default function ProjectsPage() {
         }
         throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       }
-      
-      setList(await res.json());
+      const data = await res.json();
+      setList(data.items || data);
+      if (typeof data.total === 'number') setTotalCount(data.total);
     } catch (error) {
       console.error('Error loading projects:', error);
       setToast({ message: "Có lỗi xảy ra khi tải dữ liệu", type: "error" });
@@ -63,7 +71,7 @@ export default function ProjectsPage() {
 
   // Pagination
   const { currentPage, setCurrentPage, totalPages, paginatedItems, startIndex, endIndex, resetPage } = 
-    usePagination(filteredProjects, itemsPerPage);
+    usePagination(filteredProjects, itemsPerPage, searchTerm ? undefined : totalCount);
 
   // Reset to first page when filters change and persist to URL
   useEffect(() => {
@@ -72,6 +80,11 @@ export default function ProjectsPage() {
     setParam("status", status);
     resetPage();
   }, [searchTerm, itemsPerPage, status]);
+
+  useEffect(() => {
+    // fetch theo trang/limit khi đổi trang hoặc limit hoặc status
+    refresh(currentPage, itemsPerPage);
+  }, [currentPage, itemsPerPage, status]);
 
   async function createProject(e: React.FormEvent) {
     e.preventDefault();
