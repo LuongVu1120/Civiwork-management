@@ -36,11 +36,10 @@ export default function Home() {
     { href: "/workers", label: "Nhân sự", icon: "👥", gradient: "from-indigo-500 to-indigo-600", hover: "hover:from-indigo-600 hover:to-indigo-700" },
     { href: "/projects", label: "Công trình", icon: "🏗️", gradient: "from-green-500 to-green-600", hover: "hover:from-green-600 hover:to-green-700" },
     { href: "/receipts", label: "Thu tiền", icon: "💰", gradient: "from-emerald-500 to-emerald-600", hover: "hover:from-emerald-600 hover:to-emerald-700" },
-    { href: "/expenses", label: "Chi tiền", icon: "💸", gradient: "from-red-500 to-red-600", hover: "hover:from-red-600 hover:to-red-700" },
     { href: "/materials", label: "Vật tư", icon: "🔨", gradient: "from-orange-500 to-orange-600", hover: "hover:from-orange-600 hover:to-orange-700" },
     { href: "/payroll/monthly", label: "Bảng công", icon: "📋", gradient: "from-pink-500 to-pink-600", hover: "hover:from-pink-600 hover:to-pink-700" },
-    { href: "/backup", label: "Sao lưu", icon: "💾", gradient: "from-gray-500 to-gray-600", hover: "hover:from-gray-600 hover:to-gray-700" },
-    { href: "/test", label: "Test", icon: "🧪", gradient: "from-yellow-500 to-yellow-600", hover: "hover:from-yellow-600 hover:to-yellow-700" },
+    // { href: "/backup", label: "Sao lưu", icon: "💾", gradient: "from-gray-500 to-gray-600", hover: "hover:from-gray-600 hover:to-gray-700" },
+    // { href: "/test", label: "Test", icon: "🧪", gradient: "from-yellow-500 to-yellow-600", hover: "hover:from-yellow-600 hover:to-yellow-700" },
   ];
 
   return (

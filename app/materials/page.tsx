@@ -64,7 +64,7 @@ export default function MaterialsPage() {
         startDate: startDateFilter || "",
         endDate: endDateFilter || ""
       });
-      const [m, p] = await Promise.all([
+      const [m, p] = await Promise?.all([
         authenticatedFetch(`/api/materials?${query.toString()}`, { cache: "no-store" }).then(async res => {
           if (!res.ok) {
             if (res.status === 401) {
@@ -90,7 +90,7 @@ export default function MaterialsPage() {
       ]);
       setList(m.items || m);
       if (typeof m.total === 'number') setTotalCount(m.total);
-      setProjects(p);
+      setProjects(Array.isArray(p) ? p : (p.items || []));
       if (!projectId && p[0]) setProjectId(p[0].id);
     } catch (error) {
       console.error('Error loading materials:', error);
@@ -231,7 +231,7 @@ export default function MaterialsPage() {
           />
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <ModernAutocomplete
-              options={projects.map(p=>({ id: p.id, label: p.name }))}
+              options={projects?.map(p=>({ id: p.id, label: p.name }))}
               value={filterProjectId}
               onChange={setFilterProjectId}
               placeholder="Lọc theo dự án..."

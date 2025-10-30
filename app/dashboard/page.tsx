@@ -61,7 +61,8 @@ export default function DashboardPage() {
       });
       setRecentActivities(statsJson.recent);
       const projectsData = await projectsRes.json();
-      setProjects(projectsData.map((p: any) => ({ id: p.id, name: p.name })));
+      const projectList = Array.isArray(projectsData) ? projectsData : projectsData.items || [];
+      setProjects(projectList.map((p: any) => ({ id: p.id, name: p.name })));
 
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -85,10 +86,9 @@ export default function DashboardPage() {
     { href: "/workers", label: "Nhân sự", icon: "👷", color: "bg-green-500" },
     { href: "/attendances", label: "Chấm công", icon: "📅", color: "bg-orange-500" },
     { href: "/receipts", label: "Thu tiền", icon: "💰", color: "bg-emerald-500" },
-    { href: "/expenses", label: "Chi phí", icon: "💸", color: "bg-red-500" },
     { href: "/materials", label: "Vật tư", icon: "🔧", color: "bg-purple-500" },
     { href: "/payroll", label: "Báo cáo lương", icon: "📊", color: "bg-indigo-500" },
-    { href: "/backup", label: "Sao lưu", icon: "💾", color: "bg-gray-500" }
+    // { href: "/backup", label: "Sao lưu", icon: "💾", color: "bg-gray-500" }
   ];
 
   if (authLoading || loading) {

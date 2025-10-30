@@ -67,7 +67,7 @@ export default function AttendancesPage() {
         startDate: startDateFilter || "",
         endDate: endDateFilter || ""
       });
-      const [a, w, p] = await Promise.all([
+      const [a, w, pRaw] = await Promise.all([
         authenticatedFetch(`/api/attendances?${query.toString()}`, { cache: "no-store" }).then(async r => {
           if (!r.ok) {
             if (r.status === 401) {
@@ -100,16 +100,16 @@ export default function AttendancesPage() {
             }
             throw new Error(`HTTP ${r.status}: ${r.statusText}`);
           }
-          return r.json();
+          const data = await r.json();
+          return Array.isArray(data) ? data : data.items || [];
         }),
       ]);
       setList(a.items || a);
       if (typeof a.total === 'number') setTotalCount(a.total);
       setWorkers(w);
-      setProjects(p);
-      if (!projectId && p[0]) setProjectId(p[0].id);
+      setProjects(pRaw);
+      if (!projectId && pRaw[0]) setProjectId(pRaw[0].id);
     } catch (error) {
-      console.error('Error loading data:', error);
       setToast({ message: "Có lỗi xảy ra khi tải dữ liệu", type: "error" });
     } finally {
       setLoading(false);

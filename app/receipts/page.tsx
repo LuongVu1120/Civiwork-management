@@ -52,7 +52,7 @@ export default function ReceiptsPage() {
         startDate: startDateFilter || "",
         endDate: endDateFilter || ""
       });
-      const [r, p] = await Promise.all([
+      const [receiptsData, projectsData] = await Promise.all([
         authenticatedFetch(`/api/receipts?${query.toString()}`, { cache: "no-store" }).then(async res => {
           if (!res.ok) {
             if (res.status === 401) {
@@ -65,20 +65,21 @@ export default function ReceiptsPage() {
         }),
         authenticatedFetch("/api/projects", { 
           cache: "no-store"
-        }).then(async res => {
-          if (!res.ok) {
-            if (res.status === 401) {
+        }).then(async r => {
+          if (!r.ok) {
+            if (r.status === 401) {
               window.location.href = '/auth/login';
               return [];
             }
-            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            throw new Error(`HTTP ${r.status}: ${r.statusText}`);
           }
-          return res.json();
+          const data = await r.json();
+          return Array.isArray(data) ? data : data.items || [];
         }),
       ]);
-      setList(r.items || r);
-      if (typeof r.total === 'number') setTotalCount(r.total);
-      setProjects(p);
+      setList(receiptsData.items || receiptsData);
+      if (typeof receiptsData.total === 'number') setTotalCount(receiptsData.total);
+      setProjects(projectsData);
     } catch (error) {
       console.error('Error loading receipts:', error);
       setToast({ message: "Có lỗi xảy ra khi tải dữ liệu", type: "error" });
