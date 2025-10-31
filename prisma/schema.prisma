@@ -49,6 +49,7 @@ model Project {
   expenses    Expense[]
   materials   MaterialPurchase[]
   receipts    Receipt[]
+  externalHires ExternalHire[]
 }
 
 model Attendance {
@@ -170,4 +171,21 @@ enum ExpenseCategory {
   SUBCONTRACT
   TOOLING
   MISC
+}
+
+model ExternalHire {
+  id          String   @id @default(cuid())
+  projectId   String
+  title       String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  amountVnd   Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  project     Project  @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, startDate])
+  @@index([projectId, endDate])
 }

@@ -11,7 +11,7 @@ import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
 type Worker = {
   id: string;
   fullName: string;
-  role: "DOI_TRUONG" | "THO_XAY" | "THO_PHU" | "THUE_NGOAI";
+  role: "DOI_TRUONG" | "THO_XAY" | "THO_PHU";
   dailyRateVnd: number;
   monthlyAllowanceVnd: number;
 };
@@ -20,7 +20,6 @@ const ROLE_OPTIONS: Array<{ value: Worker["role"]; label: string; defaultRate: n
   { value: "DOI_TRUONG", label: "Đội trưởng", defaultRate: 500000, defaultAllowance: 1500000 },
   { value: "THO_XAY", label: "Thợ xây", defaultRate: 420000, defaultAllowance: 0 },
   { value: "THO_PHU", label: "Thợ phụ", defaultRate: 320000, defaultAllowance: 0 },
-  { value: "THUE_NGOAI", label: "Thuê ngoài", defaultRate: 0, defaultAllowance: 0 },
 ];
 
 export default function WorkersPage() {

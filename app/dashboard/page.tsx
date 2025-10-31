@@ -18,12 +18,13 @@ type DashboardStats = {
   totalReceipts: number;
   totalExpenses: number;
   totalMaterials: number;
+  totalExternalHires: number;
   netProfit: number;
 };
 
 type RecentActivity = {
   id: string;
-  type: 'attendance' | 'receipt' | 'expense' | 'material';
+  type: 'attendance' | 'receipt' | 'material' | 'external_hire';
   description: string;
   date: string;
   amount?: number;
@@ -57,6 +58,7 @@ export default function DashboardPage() {
         totalReceipts: statsJson.totalReceipts,
         totalExpenses: statsJson.totalExpenses,
         totalMaterials: statsJson.totalMaterials,
+        totalExternalHires: statsJson.totalExternalHires || 0,
         netProfit: statsJson.netProfit
       });
       setRecentActivities(statsJson.recent);
@@ -88,7 +90,7 @@ export default function DashboardPage() {
     { href: "/receipts", label: "Thu tiền", icon: "💰", color: "bg-emerald-500" },
     { href: "/materials", label: "Vật tư", icon: "🔧", color: "bg-purple-500" },
     { href: "/payroll", label: "Báo cáo lương", icon: "📊", color: "bg-indigo-500" },
-    // { href: "/backup", label: "Sao lưu", icon: "💾", color: "bg-gray-500" }
+    { href: "/external-hires", label: "Thuê ngoài", icon: "🧰", color: "bg-amber-600" }
   ];
 
   if (authLoading || loading) {
@@ -150,14 +152,14 @@ export default function DashboardPage() {
                 <span className="font-semibold text-green-600">{formatVnd(stats.totalReceipts)}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-600">Tổng chi:</span>
-                <span className="font-semibold text-red-600">{formatVnd(stats.totalExpenses + stats.totalMaterials)}</span>
+                <span className="text-gray-600">Tổng chi (Vật tư + Thuê ngoài):</span>
+                <span className="font-semibold text-red-600">{formatVnd((stats.totalMaterials || 0) + (stats.totalExternalHires || 0))}</span>
               </div>
               <div className="border-t pt-3">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-900 font-medium">Lợi nhuận:</span>
-                  <span className={`font-bold text-lg ${stats.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatVnd(stats.netProfit)}
+                  <span className={`font-bold text-lg ${ (stats.totalReceipts - ((stats.totalMaterials||0) + (stats.totalExternalHires||0))) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatVnd(stats.totalReceipts - ((stats.totalMaterials||0) + (stats.totalExternalHires||0)))}
                   </span>
                 </div>
               </div>
@@ -220,15 +222,15 @@ export default function DashboardPage() {
               {recentActivities.map((activity) => (
                 <div key={activity.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center space-x-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm ${
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm ${
                       activity.type === 'attendance' ? 'bg-orange-500' :
                       activity.type === 'receipt' ? 'bg-emerald-500' :
-                      activity.type === 'expense' ? 'bg-red-500' :
+                      activity.type === 'external_hire' ? 'bg-amber-600' :
                       'bg-purple-500'
                     }`}>
                       {activity.type === 'attendance' ? '📅' :
                        activity.type === 'receipt' ? '💰' :
-                       activity.type === 'expense' ? '💸' : '🔧'}
+                       activity.type === 'external_hire' ? '🧰' : '🔧'}
                     </div>
                     <div>
                       <div className="text-sm font-medium text-gray-900">{activity.description}</div>

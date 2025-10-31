@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Worker schemas
-export const WorkerRoleSchema = z.enum(['DOI_TRUONG', 'THO_XAY', 'THO_PHU', 'THUE_NGOAI']);
+export const WorkerRoleSchema = z.enum(['DOI_TRUONG', 'THO_XAY', 'THO_PHU']);
 
 export const CreateWorkerSchema = z.object({
   fullName: z.string().min(1, 'Họ tên là bắt buộc').max(100, 'Họ tên không được quá 100 ký tự'),
@@ -89,6 +89,20 @@ export const CreateMaterialSchema = z.object({
 
 export const UpdateMaterialSchema = CreateMaterialSchema.partial();
 
+// External Hire schemas
+export const CreateExternalHireSchema = z.object({
+  projectId: z.string().cuid('ID dự án không hợp lệ'),
+  title: z.string().min(1, 'Tiêu đề là bắt buộc').max(200, 'Tiêu đề quá dài'),
+  description: z.string().max(1000).optional().nullable(),
+  startDate: z.string().datetime('Ngày bắt đầu không hợp lệ'),
+  endDate: z.string().datetime('Ngày kết thúc không hợp lệ'),
+  amountVnd: z.number().int().min(0, 'Số tiền phải >= 0').max(10000000000, 'Số tiền quá cao')
+});
+
+export const UpdateExternalHireSchema = CreateExternalHireSchema.partial().extend({
+  id: z.string().cuid('ID không hợp lệ')
+});
+
 // Payroll schemas
 export const CreatePayrollSchema = z.object({
   workerId: z.string().cuid('ID nhân viên không hợp lệ'),
@@ -137,3 +151,5 @@ export type CreatePayrollInput = z.infer<typeof CreatePayrollSchema>;
 export type PaginationInput = z.infer<typeof PaginationSchema>;
 export type DateRangeInput = z.infer<typeof DateRangeSchema>;
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
+export type CreateExternalHireInput = z.infer<typeof CreateExternalHireSchema>;
+export type UpdateExternalHireInput = z.infer<typeof UpdateExternalHireSchema>;

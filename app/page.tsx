@@ -37,6 +37,7 @@ export default function Home() {
     { href: "/projects", label: "Công trình", icon: "🏗️", gradient: "from-green-500 to-green-600", hover: "hover:from-green-600 hover:to-green-700" },
     { href: "/receipts", label: "Thu tiền", icon: "💰", gradient: "from-emerald-500 to-emerald-600", hover: "hover:from-emerald-600 hover:to-emerald-700" },
     { href: "/materials", label: "Vật tư", icon: "🔨", gradient: "from-orange-500 to-orange-600", hover: "hover:from-orange-600 hover:to-orange-700" },
+    { href: "/external-hires", label: "Thuê ngoài", icon: "🧰", gradient: "from-amber-600 to-amber-700", hover: "hover:from-amber-700 hover:to-amber-800" },
     { href: "/payroll/monthly", label: "Bảng công", icon: "📋", gradient: "from-pink-500 to-pink-600", hover: "hover:from-pink-600 hover:to-pink-700" },
     // { href: "/backup", label: "Sao lưu", icon: "💾", gradient: "from-gray-500 to-gray-600", hover: "hover:from-gray-600 hover:to-gray-700" },
     // { href: "/test", label: "Test", icon: "🧪", gradient: "from-yellow-500 to-yellow-600", hover: "hover:from-yellow-600 hover:to-yellow-700" },
