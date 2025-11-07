@@ -21,6 +21,11 @@ async function handler(request: NextRequest) {
     prisma.externalHire.findMany({ where: { projectId, isActive: true }, orderBy: { startDate: "asc" } })
   ]);
 
+  // Helper function to format number with dot separator
+  const formatNumber = (num: number): string => {
+    return new Intl.NumberFormat('vi-VN').format(num);
+  };
+
   const ExcelJS = (await import("exceljs")).default;
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "CiviWork";
@@ -30,7 +35,7 @@ async function handler(request: NextRequest) {
     sheet1.addRow([
       new Date(r.date).toLocaleDateString("vi-VN"),
       r.description || "",
-      r.amountVnd
+      formatNumber(r.amountVnd)
     ]);
   });
   const sheet2 = workbook.addWorksheet("Chi phí");
@@ -40,7 +45,7 @@ async function handler(request: NextRequest) {
       new Date(e.date).toLocaleDateString("vi-VN"),
       e.category,
       e.description || "",
-      e.amountVnd
+      formatNumber(e.amountVnd)
     ]);
   });
   const sheet3 = workbook.addWorksheet("Vật tư");
@@ -50,8 +55,8 @@ async function handler(request: NextRequest) {
       new Date(m.date).toLocaleDateString("vi-VN"),
       m.itemName,
       (m.quantityText ? (m.unit ? `${m.quantityText} ${m.unit}` : m.quantityText) : (m.unit ? `${Number(m.quantity)} ${m.unit}` : String(m.quantity))),
-      m.unitPriceVnd,
-      m.totalVnd,
+      formatNumber(m.unitPriceVnd),
+      formatNumber(m.totalVnd),
       m.supplier || ""
     ]);
   });
@@ -65,7 +70,7 @@ async function handler(request: NextRequest) {
       new Date(h.endDate).toLocaleDateString("vi-VN"),
       h.title,
       h.description || "",
-      h.amountVnd
+      formatNumber(h.amountVnd)
     ]);
   });
 
@@ -78,11 +83,11 @@ async function handler(request: NextRequest) {
   sumSheet.addRow(["Công trình", project.name]);
   if (project.startDate) sumSheet.addRow(["Ngày bắt đầu", new Date(project.startDate as any).toLocaleDateString("vi-VN")]);
   if (project.endDate) sumSheet.addRow(["Ngày đóng", new Date(project.endDate as any).toLocaleDateString("vi-VN")]);
-  sumSheet.addRow(["Tổng thu", totalReceipts]);
-  sumSheet.addRow(["Tổng chi", totalExpenses]);
-  sumSheet.addRow(["Vật tư", totalMaterials]);
-  sumSheet.addRow(["Thuê ngoài", totalExternalHires]);
-  sumSheet.addRow(["Lợi nhuận", totalReceipts - totalExpenses - totalMaterials - totalExternalHires]);
+  sumSheet.addRow(["Tổng thu", formatNumber(totalReceipts)]);
+  sumSheet.addRow(["Tổng chi", formatNumber(totalExpenses)]);
+  sumSheet.addRow(["Vật tư", formatNumber(totalMaterials)]);
+  sumSheet.addRow(["Thuê ngoài", formatNumber(totalExternalHires)]);
+  sumSheet.addRow(["Lợi nhuận", formatNumber(totalReceipts - totalExpenses - totalMaterials - totalExternalHires)]);
 
   const buffer = await workbook.xlsx.writeBuffer();
   return new NextResponse(buffer, {

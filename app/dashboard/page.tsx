@@ -15,6 +15,7 @@ type DashboardStats = {
   receipts: number;
   expenses: number;
   materials: number;
+  externalHires: number;
   totalReceipts: number;
   totalExpenses: number;
   totalMaterials: number;
@@ -55,6 +56,7 @@ export default function DashboardPage() {
         receipts: statsJson.receipts,
         expenses: statsJson.expenses,
         materials: statsJson.materials,
+        externalHires: statsJson.externalHires || 0,
         totalReceipts: statsJson.totalReceipts,
         totalExpenses: statsJson.totalExpenses,
         totalMaterials: statsJson.totalMaterials,
@@ -137,6 +139,12 @@ export default function DashboardPage() {
               <div className="text-center">
                 <div className="text-2xl font-bold text-purple-600">{stats.materials}</div>
                 <div className="text-sm text-gray-600">Vật tư</div>
+              </div>
+            </ModernCard>
+            <ModernCard className="p-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-amber-600">{stats.externalHires}</div>
+                <div className="text-sm text-gray-600">Thuê ngoài</div>
               </div>
             </ModernCard>
           </div>

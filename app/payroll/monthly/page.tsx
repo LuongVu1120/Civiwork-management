@@ -153,6 +153,11 @@ export default function PayrollMonthlyPage() {
       // Add headers
       summaryWs.addRow(headers);
       
+      // Helper function to format number with dot separator
+      const formatNumber = (num: number): string => {
+        return new Intl.NumberFormat('vi-VN').format(num);
+      };
+      
       // Add data rows
       items.forEach(it => {
         
@@ -197,10 +202,10 @@ export default function PayrollMonthlyPage() {
           it.fullName, 
           ...dayColumns,
           it.totalDays, 
-          it.wageTotalVnd, 
-          it.mealTotalVnd, 
-          it.allowanceVnd, 
-          it.payableVnd
+          formatNumber(it.wageTotalVnd), 
+          formatNumber(it.mealTotalVnd), 
+          formatNumber(it.allowanceVnd), 
+          formatNumber(it.payableVnd)
         ]);
       });
       
@@ -211,7 +216,7 @@ export default function PayrollMonthlyPage() {
         totalRowData.push("");
       }
       // Thêm các cột tổng
-      totalRowData.push("", "", "", "", total.toString());
+      totalRowData.push("", "", "", "", formatNumber(total));
       
       const totalRow = summaryWs.addRow(totalRowData);
       totalRow.font = { bold: true };
