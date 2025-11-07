@@ -33,6 +33,7 @@ export default function ExternalHiresPage() {
   const [editing, setEditing] = useState<ExternalHire | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [confirmState, setConfirmState] = useState<{ open: boolean; id?: string }>({ open: false });
+  const [showCompletedProjects, setShowCompletedProjects] = useState(false);
 
   const [projectId, setProjectId] = useState<string>("");
   const [title, setTitle] = useState<string>("");
@@ -96,6 +97,11 @@ export default function ExternalHiresPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const selected = projects.find(p => p.id === projectId);
+    if (selected?.isCompleted) {
+      setToast({ message: "Công trình đã hoàn thành. Không thể thêm/cập nhật thuê ngoài.", type: "error" });
+      return;
+    }
     try {
       const payload = {
         projectId,
@@ -171,7 +177,15 @@ export default function ExternalHiresPage() {
             <div className="grid md:grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Công trình</label>
-                <ModernAutocomplete options={projects.map(p=>({ id: p.id, label: p.name }))} value={projectId} onChange={setProjectId} placeholder="Chọn dự án..." />
+                <ModernAutocomplete 
+                  options={(showCompletedProjects ? projects : projects.filter(p => !p.isCompleted)).map(p => ({ 
+                    id: p.id, 
+                    label: p.name + (p.isCompleted ? " (đã hoàn thành)" : "") 
+                  }))} 
+                  value={projectId} 
+                  onChange={setProjectId} 
+                  placeholder="Chọn dự án..." 
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tiêu đề</label>

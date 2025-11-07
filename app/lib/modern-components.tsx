@@ -88,7 +88,8 @@ export function ModernInput({
   required = false,
   min,
   max,
-  step
+  step,
+  inputMode
 }: { 
   value: string | number;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -100,6 +101,7 @@ export function ModernInput({
   min?: number;
   max?: number;
   step?: number;
+  inputMode?: string;
 }) {
   return (
     <input
@@ -111,6 +113,7 @@ export function ModernInput({
       min={min}
       max={max}
       step={step}
+      {...(inputMode ? { inputMode: inputMode as React.InputHTMLAttributes<HTMLInputElement>['inputMode'] } : {})}
       className={`w-full px-4 py-3 rounded-xl border-2 transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-blue-500/20 ${
         error 
           ? "border-red-500 bg-red-50" 

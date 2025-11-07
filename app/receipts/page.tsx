@@ -8,7 +8,7 @@ import { usePersistedParams } from "@/app/hooks/usePersistedParams";
 import { Toast } from "@/app/lib/validation";
 import { ConfirmDialog } from "@/app/lib/modern-components";
 import { useAuthenticatedFetch } from "@/app/hooks/useAuthenticatedFetch";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 
 type Receipt = { id: string; date: string; amountVnd: number; description?: string | null; projectId: string };
 type Project = { id: string; name: string; isCompleted?: boolean };
@@ -284,17 +284,24 @@ export default function ReceiptsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Số tiền (VND)</label>
-              <RHFInput 
-                control={control} 
-                name="amountVnd" 
-                rules={{ required: true, min: 0 }} 
-                type="text" 
-                inputMode="numeric"
-                placeholder="Ví dụ: 1.000.000" 
-                onChange={(e: any) => {
-                  const digits = String(e.target.value || '').replace(/\D/g, '');
-                  e.target.value = new Intl.NumberFormat('vi-VN').format(Number(digits || 0));
-                }}
+              <Controller
+                name="amountVnd"
+                control={control}
+                rules={{ required: true, min: 0 }}
+                render={({ field, fieldState }) => (
+                  <ModernInput
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Ví dụ: 1.000.000"
+                    value={field.value ?? ''}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '');
+                      const formatted = new Intl.NumberFormat('vi-VN').format(Number(digits || 0));
+                      field.onChange(formatted);
+                    }}
+                    error={!!fieldState.error}
+                  />
+                )}
               />
             </div>
             <div>
