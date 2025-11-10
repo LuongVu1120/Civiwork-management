@@ -43,7 +43,8 @@ async function createAttendancesBulk(request: NextRequest, validatedData: any) {
 }
 
 export const POST = withMiddleware(createAttendancesBulk, {
-  rateLimit: { requests: 10, windowMs: 15 * 60 * 1000 },
+  // Nới giới hạn để thao tác dev/FE không dính 429 quá sớm
+  rateLimit: { requests: 100, windowMs: 60 * 1000 },
   validate: CreateAttendanceBulkSchema,
   requireAuth: true
 });

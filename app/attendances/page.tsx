@@ -55,6 +55,10 @@ export default function AttendancesPage() {
   const [projectId, setProjectId] = useState<string>("");
   const [dayFraction, setDayFraction] = useState<string>("1.00");
   const [meal, setMeal] = useState<"FULL_DAY" | "HALF_DAY" | "NONE">("FULL_DAY");
+  // Danh sách worker đã chấm công cho ngày + công trình đang chọn
+  const [checkedWorkerIdsForSelection, setCheckedWorkerIdsForSelection] = useState<string[]>([]);
+  // Trạng thái submit để tránh bấm nhiều lần gây 429
+  const [submittingBulk, setSubmittingBulk] = useState<boolean>(false);
 
   async function refresh(pageParam: number = 1, limitParam: number = itemsPerPage) {
     setLoading(true);
@@ -118,6 +122,31 @@ export default function AttendancesPage() {
 
   useEffect(() => { refresh(); }, []);
 
+  // Hàm dùng lại: tải những worker đã chấm công cho ngày + công trình hiện tại
+  async function loadCheckedWorkersForCurrentSelection() {
+    setCheckedWorkerIdsForSelection([]);
+    if (!projectId || !date) return;
+    try {
+      const params = new URLSearchParams({
+        projectId,
+        startDate: date,
+        endDate: date,
+        limit: "100"
+      });
+      const res = await authenticatedFetch(`/api/attendances?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const items: Attendance[] = Array.isArray(data) ? data : (data.items ?? []);
+      const ids = Array.from(new Set(items.map(a => a.workerId)));
+      setCheckedWorkerIdsForSelection(ids);
+    } catch (_e) {
+      // bỏ qua lỗi hiển thị đánh dấu
+    }
+  }
+
+  // Khi thay đổi ngày hoặc công trình, tải danh sách đánh dấu
+  useEffect(() => { loadCheckedWorkersForCurrentSelection(); }, [projectId, date]);
+
   // Chỉ lọc theo ô tìm kiếm ở client; các bộ lọc khác đã áp dụng ở server
   const filteredAttendances = list.filter(attendance => {
     const worker = (attendance as any).worker || workers.find(w => w.id === attendance.workerId);
@@ -153,6 +182,7 @@ export default function AttendancesPage() {
 
   async function createAttendancesBulk(e: React.FormEvent) {
     e.preventDefault();
+    if (submittingBulk) return;
     if (!projectId) {
       alert('Vui lòng chọn dự án');
       return;
@@ -167,6 +197,7 @@ export default function AttendancesPage() {
       return;
     }
     try {
+      setSubmittingBulk(true);
       const res = await authenticatedFetch("/api/attendances/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -178,13 +209,26 @@ export default function AttendancesPage() {
           meal,
         }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        if (res.status === 429) {
+          const retryAfter = res.headers.get('Retry-After');
+          const waitMsg = retryAfter ? `Vui lòng thử lại sau ${retryAfter} giây.` : "Vui lòng thử lại sau ít phút.";
+          setToast({ message: `Bạn thao tác quá nhanh. ${waitMsg}`, type: "error" });
+          return;
+        }
+        throw new Error(`HTTP ${res.status}`);
+      }
+      // Cập nhật ngay danh sách đã chấm (không cần reload)
+      setCheckedWorkerIdsForSelection(prev => Array.from(new Set([...prev, ...selectedWorkerIds])));
       setSelectedWorkerIds([]);
       await refresh();
+      await loadCheckedWorkersForCurrentSelection();
       setToast({ message: "Chấm công hàng loạt thành công!", type: "success" });
     } catch (error) {
       console.error('Error creating attendances bulk:', error);
       setToast({ message: "Có lỗi xảy ra khi chấm công hàng loạt", type: "error" });
+    } finally {
+      setSubmittingBulk(false);
     }
   }
 
@@ -196,10 +240,20 @@ export default function AttendancesPage() {
 
   async function doDeleteAttendance(id: string) {
     try {
-      await authenticatedFetch(`/api/attendances?id=${id}`, {
+      const res = await authenticatedFetch(`/api/attendances?id=${id}`, {
         method: "DELETE",
       });
+      if (!res.ok) {
+        if (res.status === 429) {
+          const retryAfter = res.headers.get('Retry-After');
+          const waitMsg = retryAfter ? `Vui lòng thử lại sau ${retryAfter} giây.` : "Vui lòng thử lại sau ít phút.";
+          setToast({ message: `Bạn xóa quá nhanh. ${waitMsg}`, type: "error" });
+          return;
+        }
+        throw new Error(`HTTP ${res.status}`);
+      }
       await refresh();
+      await loadCheckedWorkersForCurrentSelection();
       setToast({ message: "Xóa chấm công thành công!", type: "success" });
     } catch (error) {
       console.error('Error deleting attendance:', error);
@@ -302,23 +356,37 @@ export default function AttendancesPage() {
                   className="mb-2 border border-gray-300 rounded-md p-2 text-sm"
                 />
                 <div className="max-h-52 overflow-auto border rounded-md bg-white p-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-2">
-                  {workers.filter(w => w.fullName.toLowerCase().includes(workerSearch.trim().toLowerCase())).map(w => (
-                    <label key={w.id} className="flex items-center gap-2 py-1 px-1 select-none">
-                      <input
-                        type="checkbox"
-                        className="h-5 w-5 accent-blue-600"
-                        checked={selectedWorkerIds.includes(w.id)}
-                        onChange={e => {
-                          setSelectedWorkerIds(prev => e.target.checked ? Array.from(new Set([...prev, w.id])) : prev.filter(id => id !== w.id));
-                        }}
-                      />
-                      <span className="text-sm text-gray-900">{w.fullName}</span>
-                    </label>
-                  ))}
+                  {workers.filter(w => w.fullName.toLowerCase().includes(workerSearch.trim().toLowerCase())).map(w => {
+                    const alreadyChecked = checkedWorkerIdsForSelection.includes(w.id);
+                    const isCheckedInForm = selectedWorkerIds.includes(w.id);
+                    return (
+                      <label key={w.id} className="flex items-center justify-between gap-2 py-1 px-1 select-none">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            className="h-5 w-5 accent-blue-600"
+                            checked={isCheckedInForm}
+                            disabled={alreadyChecked}
+                            onChange={e => {
+                              setSelectedWorkerIds(prev => e.target.checked ? Array.from(new Set([...prev, w.id])) : prev.filter(id => id !== w.id));
+                            }}
+                          />
+                          <span className={`text-sm ${alreadyChecked ? "text-gray-400 line-through" : "text-gray-900"}`}>{w.fullName}</span>
+                        </div>
+                        {alreadyChecked && (
+                          <span className="ml-2 inline-block text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 whitespace-nowrap">
+                            ĐÃ CHẤM
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
                   {workers.filter(w => w.fullName.toLowerCase().includes(workerSearch.trim().toLowerCase())).length === 0 && <div className="text-gray-400 italic col-span-full">Không tìm thấy công nhân phù hợp</div>}
                 </div>
               </div>
-              <ModernButton type="submit" className="w-full text-base py-2 font-semibold">Chấm công nhiều người</ModernButton>
+              <ModernButton type="submit" className="w-full text-base py-2 font-semibold" disabled={submittingBulk}>
+                {submittingBulk ? "Đang chấm..." : "Chấm công nhiều người"}
+              </ModernButton>
               {/* Hiển thị kết quả trả về ở đây */}
               {/* Có thể lưu vào 1 state addResult (inserted, skipped) sau khi submit API */}
             </ModernForm>

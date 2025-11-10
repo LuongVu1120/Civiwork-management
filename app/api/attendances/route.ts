@@ -112,23 +112,24 @@ async function deleteAttendance(request: NextRequest) {
 }
 
 export const GET = withMiddleware(getAttendances, {
-  rateLimit: { requests: 100, windowMs: 15 * 60 * 1000 },
+  rateLimit: { requests: 100, windowMs: 60 * 1000 },
   requireAuth: true
 });
 
 export const POST = withMiddleware(createAttendance, {
-  rateLimit: { requests: 20, windowMs: 15 * 60 * 1000 },
+  rateLimit: { requests: 100, windowMs: 60 * 1000 },
   validate: CreateAttendanceSchema,
   requireAuth: true // Tạm thời disable auth cho development
 });
 
 export const PUT = withMiddleware(updateAttendance, {
-  rateLimit: { requests: 20, windowMs: 15 * 60 * 1000 },
+  rateLimit: { requests: 100, windowMs: 60 * 1000 },
   requireAuth: true // Tạm thời disable auth cho development
 });
 
 export const DELETE = withMiddleware(deleteAttendance, {
-  rateLimit: { requests: 20, windowMs: 15 * 60 * 1000 },
+  // Nâng giới hạn để thao tác xóa không bị 429 trong lúc dev/FE
+  rateLimit: { requests: 100, windowMs: 60 * 1000 },
   requireAuth: true // Tạm thời disable auth cho development
 });
 
